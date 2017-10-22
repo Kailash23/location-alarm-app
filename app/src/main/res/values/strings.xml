@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Location Alarm</string>
-    <string name="title_activity_maps">location_alarm</string>
+    <string name="app_name">Location Alarm </string>
+    <string name="title_activity_maps">Location Alarm</string>
 </resources>
