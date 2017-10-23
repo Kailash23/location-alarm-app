@@ -8,6 +8,7 @@ import android.location.Location;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
+import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationListener;
 
 import android.os.Build;
@@ -43,6 +44,8 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 
 
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback,
@@ -53,22 +56,29 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         LocationListener {
 
     public static final int REQUEST_LOCATION_CODE = 99;
-    public static final String TAG = "MainActivityTag";
     final static int REQUEST_LOCATION = 199;
-    PlaceAutocompleteFragment autocompleteFragment;
-    View mapView;
+    private final LatLng mDefaultLocation = new LatLng(20.59, 77.567);
+    private PlaceAutocompleteFragment autocompleteFragment;
+    private View mapView;
+    private FusedLocationProviderClient mFusedLocationProviderClient;
     private Boolean exit = false;
+    private LatLng locChangedCoordinates;
     private GoogleMap mMap;
     private GoogleApiClient client;
-    private LocationRequest locationRequest;
-    private Location lastLocation;
-    private Marker currentLocationMarker;
+    private Location mLastKnownLocation;
     private Marker searchMarker;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+
+        if (savedInstanceState != null) {
+            mLastKnownLocation = savedInstanceState.getParcelable("location");
+        }
+
+        // Construct a FusedLocationProviderClient.
+        mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
         // Retrieve the PlaceAutocompleteFragment.
         autocompleteFragment = (PlaceAutocompleteFragment)
@@ -79,8 +89,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             public void onPlaceSelected(Place place) {
                 LatLng coordinate;
                 String title;
+
                 title = (String) place.getName();
                 coordinate = place.getLatLng();
+
                 CameraUpdate location = CameraUpdateFactory.newLatLngZoom(
                         coordinate, 15);
 
@@ -100,7 +112,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             public void onError(Status status) {
                 Toast.makeText(getApplicationContext(), "Place selection failed: " + status.getStatusMessage(),
                         Toast.LENGTH_SHORT).show();
-                Log.i(TAG, "An error occurred: " + status);
             }
         });
 
@@ -114,6 +125,31 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .findFragmentById(R.id.map);
         mapView = mapFragment.getView();
         mapFragment.getMapAsync(this);
+    }
+
+    private void getDeviceLocation() {
+        try {
+            Task locationResult = mFusedLocationProviderClient.getLastLocation();
+            locationResult.addOnCompleteListener(this, new OnCompleteListener() {
+                @Override
+                public void onComplete(@NonNull Task task) {
+                    if (task.isSuccessful()) {
+                        // Set the map's camera position to the current location of the device.
+                        mLastKnownLocation = (Location) task.getResult();
+                        if (mLastKnownLocation != null) {
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                                    new LatLng(mLastKnownLocation.getLatitude(),
+                                            mLastKnownLocation.getLongitude()), 1));
+                        }
+                    } else {
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mDefaultLocation, 5));
+                        mMap.getUiSettings().setMyLocationButtonEnabled(false);
+                    }
+                }
+            });
+        } catch (SecurityException e) {
+            Log.e("Exception: %s", e.getMessage());
+        }
     }
 
     //Method for handling permission request response
@@ -141,8 +177,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap = googleMap;
         mMap.setOnMyLocationButtonClickListener(this);
         mMap.setOnMyLocationClickListener(this);
-        if (mapView != null &&
-                mapView.findViewById(Integer.parseInt("1")) != null) {
+
+        if (mapView != null && mapView.findViewById(Integer.parseInt("1")) != null) {
             // Get the button view
             View locationButton = ((View) mapView.findViewById(Integer.parseInt("1")).getParent()).findViewById(Integer.parseInt("2"));
             // and next place it, on bottom right (as Google Maps app)
@@ -157,7 +193,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             buildGoogleApiClient();
             mMap.setMyLocationEnabled(true);
         }
+
+        //This function display initial location to device location
+        getDeviceLocation();
     }
+
 
     protected synchronized void buildGoogleApiClient() {
         //Google API Client Created
@@ -172,22 +212,22 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onLocationChanged(Location location) {
-        lastLocation = location;
 
         //Get lat and lng of new location
-        LatLng latLng = new LatLng(location.getLatitude(), location.getLongitude());
+        locChangedCoordinates = new LatLng(location.getLatitude(), location.getLongitude());
 
-        mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+        mMap.moveCamera(CameraUpdateFactory.newLatLng(locChangedCoordinates));
         mMap.animateCamera(CameraUpdateFactory.zoomBy(15));
 
         if (client != null) {
             LocationServices.FusedLocationApi.removeLocationUpdates(client, this);
         }
+
     }
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
-        locationRequest = new LocationRequest();
+        LocationRequest locationRequest = new LocationRequest();
 
         locationRequest.setInterval(20000);
         locationRequest.setFastestInterval(10000);
@@ -196,6 +236,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             LocationServices.FusedLocationApi.requestLocationUpdates(client, locationRequest, this);
         }
 
+        // For dialog Box that ask for enabling GPS
         LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
                 .addLocationRequest(locationRequest);
 
@@ -232,8 +273,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 }
             }
         });
-
-
     }
 
     public Boolean checkLocationPermission() {
@@ -290,10 +329,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onMyLocationClick(@NonNull Location location) {
         double lat, lng;
         int acc;
-
         lat = location.getLatitude();
         lng = location.getLongitude();
         acc = (int) location.getAccuracy();
-        Toast.makeText(this, "Accuracy: " + acc + " m\n(" + lat + ", " + lng + ")", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "Accuracy: " + acc + " m\n(" + lat + ", " + lng + ")", Toast.LENGTH_SHORT).show();
     }
 }
