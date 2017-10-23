@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Location Alarm </string>
     <string name="title_activity_maps">Location Alarm</string>
+    <string name="done">Done</string>
+    <string name="cancel">Cancel</string>
+    <string name="check_point_name_hint">Enter a name for this check point</string>
 </resources>

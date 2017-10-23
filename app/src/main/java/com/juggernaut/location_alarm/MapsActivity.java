@@ -19,11 +19,16 @@ import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.Window;
+import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -42,7 +47,9 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
@@ -58,8 +65,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     final static int REQUEST_LOCATION = 199;
     private static final int LOCATION_UPDATE_INTERVAL = 15000;
     private static final int LOCATION_UPDATE_FASTEST_INTERVAL = 10000;
-
-    private final LatLng mDefaultLocation = new LatLng(20.59, 77.567);
+    private final LatLng mDefaultLocation = new LatLng(-33.87365, 151.20689);
+    private ImageView locationPin;
     private View mapView;
     private FusedLocationProviderClient mFusedLocationProviderClient;
     private Boolean exit = false;
@@ -72,6 +79,24 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+
+        locationPin = (ImageView) findViewById(R.id.location_pin);
+        locationPin.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                LatLng target = mMap.getCameraPosition().target;
+                AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
+                View dialogView =
+                        LayoutInflater.from(MapsActivity.this).inflate(R.layout.dialog_box, null, false);
+                ((TextView) dialogView.findViewById(R.id.check_point_lat_tv)).setText(
+                        String.valueOf(target.latitude));
+                ((TextView) dialogView.findViewById(R.id.check_point_long_tv)).setText(
+                        String.valueOf(target.longitude));
+                EditText nameEditText = dialogView.findViewById(R.id.check_point_name_et);
+                AlertDialog alertDialog = builder.setView(dialogView).show();
+                alertDialog.show();
+            }
+        });
 
         if (savedInstanceState != null) {
             mLastKnownLocation = savedInstanceState.getParcelable("location");
@@ -110,7 +135,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         });
 
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             checkLocationPermission();
         }
@@ -121,9 +145,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         mapView = mapFragment.getView();
         mapFragment.getMapAsync(this);
 
+
     }
 
     private void getDeviceLocation() {
+
         try {
             Task locationResult = mFusedLocationProviderClient.getLastLocation();
             locationResult.addOnCompleteListener(this, new OnCompleteListener() {
@@ -147,6 +173,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             Log.e("Exception: %s", e.getMessage());
         }
     }
+
 
     //Method for handling permission request response
     @Override
@@ -190,6 +217,24 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             mMap.setMyLocationEnabled(true);
             getDeviceLocation();
         }
+
+
+        mMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
+            @Override
+            public void onMapLongClick(LatLng latLng) {
+                MarkerOptions markerOptions = new MarkerOptions();
+                markerOptions.position(latLng);
+                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
+                markerOptions.title(latLng.latitude + " : " + latLng.longitude);
+                markerOptions.draggable(true);
+                mMap.clear();
+                mMap.addMarker(markerOptions);
+
+                // Animating to the touched position
+                mMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
+                mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
+            }
+        });
     }
 
 
