@@ -15,12 +15,14 @@ import android.os.Build;
 import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.view.Window;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
@@ -40,10 +42,7 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.Marker;
-import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
@@ -57,17 +56,18 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     public static final int REQUEST_LOCATION_CODE = 99;
     final static int REQUEST_LOCATION = 199;
+    private static final int LOCATION_UPDATE_INTERVAL = 15000;
+    private static final int LOCATION_UPDATE_FASTEST_INTERVAL = 10000;
+
     private final LatLng mDefaultLocation = new LatLng(20.59, 77.567);
-    private PlaceAutocompleteFragment autocompleteFragment;
     private View mapView;
     private FusedLocationProviderClient mFusedLocationProviderClient;
     private Boolean exit = false;
-    private LatLng locChangedCoordinates;
     private GoogleMap mMap;
     private GoogleApiClient client;
     private Location mLastKnownLocation;
-    private Marker searchMarker;
 
+    @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -76,34 +76,29 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (savedInstanceState != null) {
             mLastKnownLocation = savedInstanceState.getParcelable("location");
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            Window window = getWindow();
+            window.getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        }
 
         // Construct a FusedLocationProviderClient.
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
         // Retrieve the PlaceAutocompleteFragment.
-        autocompleteFragment = (PlaceAutocompleteFragment)
+        PlaceAutocompleteFragment autocompleteFragment = (PlaceAutocompleteFragment)
                 getFragmentManager().findFragmentById(R.id.place_autocomplete_fragment);
 
         autocompleteFragment.setOnPlaceSelectedListener(new PlaceSelectionListener() {
             @Override
             public void onPlaceSelected(Place place) {
                 LatLng coordinate;
-                String title;
-
-                title = (String) place.getName();
                 coordinate = place.getLatLng();
 
                 CameraUpdate location = CameraUpdateFactory.newLatLngZoom(
-                        coordinate, 15);
+                        coordinate, 14);
 
-                MarkerOptions markerOptions = new MarkerOptions();
-                markerOptions.position(coordinate);
-                markerOptions.title(title);
-                markerOptions.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE));
-                if (searchMarker != null) {
-                    searchMarker.remove();
-                }
-                searchMarker = mMap.addMarker(markerOptions);
 
                 mMap.animateCamera(location);
             }
@@ -125,6 +120,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .findFragmentById(R.id.map);
         mapView = mapFragment.getView();
         mapFragment.getMapAsync(this);
+
     }
 
     private void getDeviceLocation() {
@@ -192,10 +188,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             buildGoogleApiClient();
             mMap.setMyLocationEnabled(true);
+            getDeviceLocation();
         }
-
-        //This function display initial location to device location
-        getDeviceLocation();
     }
 
 
@@ -214,10 +208,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onLocationChanged(Location location) {
 
         //Get lat and lng of new location
-        locChangedCoordinates = new LatLng(location.getLatitude(), location.getLongitude());
+        LatLng locChangedCoordinates = new LatLng(location.getLatitude(), location.getLongitude());
 
         mMap.moveCamera(CameraUpdateFactory.newLatLng(locChangedCoordinates));
-        mMap.animateCamera(CameraUpdateFactory.zoomBy(15));
+        mMap.animateCamera(CameraUpdateFactory.zoomBy(14));
 
         if (client != null) {
             LocationServices.FusedLocationApi.removeLocationUpdates(client, this);
@@ -229,8 +223,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onConnected(@Nullable Bundle bundle) {
         LocationRequest locationRequest = new LocationRequest();
 
-        locationRequest.setInterval(20000);
-        locationRequest.setFastestInterval(10000);
+        locationRequest.setInterval(LOCATION_UPDATE_INTERVAL);
+        locationRequest.setFastestInterval(LOCATION_UPDATE_FASTEST_INTERVAL);
         locationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             LocationServices.FusedLocationApi.requestLocationUpdates(client, locationRequest, this);
