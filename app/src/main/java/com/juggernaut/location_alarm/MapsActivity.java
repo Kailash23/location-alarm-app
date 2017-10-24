@@ -25,6 +25,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.Window;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -84,17 +85,47 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         locationPin.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                LatLng target = mMap.getCameraPosition().target;
+                final LatLng target = mMap.getCameraPosition().target;
                 AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
                 View dialogView =
                         LayoutInflater.from(MapsActivity.this).inflate(R.layout.dialog_box, null, false);
-                ((TextView) dialogView.findViewById(R.id.check_point_lat_tv)).setText(
+                ((TextView) dialogView.findViewById(R.id.checkpoint_lat_tv)).setText(
                         String.valueOf(target.latitude));
-                ((TextView) dialogView.findViewById(R.id.check_point_long_tv)).setText(
+                ((TextView) dialogView.findViewById(R.id.checkpoint_long_tv)).setText(
                         String.valueOf(target.longitude));
-                EditText nameEditText = dialogView.findViewById(R.id.check_point_name_et);
-                AlertDialog alertDialog = builder.setView(dialogView).show();
-                alertDialog.show();
+                final EditText nameEditText = dialogView.findViewById(R.id.checkpoint_name_tv);
+                final AlertDialog alertDialog = builder.setView(dialogView).show();
+                Button done = (Button) alertDialog.findViewById(R.id.dialogbox_done_btn);
+                done.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        String enteredText = nameEditText.getText().toString();
+                        if (enteredText.length() >= 3) {
+                            MarkerOptions markerOptions = new MarkerOptions();
+                            markerOptions.position(target);
+                            markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
+                            markerOptions.title(target.latitude + " : " + target.longitude);
+                            markerOptions.draggable(true);
+                            mMap.clear();
+                            mMap.addMarker(markerOptions);
+
+                            mMap.animateCamera(CameraUpdateFactory.newLatLng(target));
+                            mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
+                            alertDialog.dismiss();
+                        } else {
+                            nameEditText.setError("Name should have minimum of 4 characters.");
+                        }
+                    }
+                });
+
+                Button cancel = (Button) alertDialog.findViewById(R.id.dialogbox_cancel_btn);
+                cancel.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        alertDialog.dismiss();
+                    }
+                });
+
             }
         });
 
@@ -144,8 +175,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .findFragmentById(R.id.map);
         mapView = mapFragment.getView();
         mapFragment.getMapAsync(this);
-
-
     }
 
     private void getDeviceLocation() {
@@ -219,22 +248,22 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
 
 
-        mMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
-            @Override
-            public void onMapLongClick(LatLng latLng) {
-                MarkerOptions markerOptions = new MarkerOptions();
-                markerOptions.position(latLng);
-                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
-                markerOptions.title(latLng.latitude + " : " + latLng.longitude);
-                markerOptions.draggable(true);
-                mMap.clear();
-                mMap.addMarker(markerOptions);
-
-                // Animating to the touched position
-                mMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
-                mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
-            }
-        });
+//        mMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
+//            @Override
+//            public void onMapLongClick(LatLng latLng) {
+//                MarkerOptions markerOptions = new MarkerOptions();
+//                markerOptions.position(latLng);
+//                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
+//                markerOptions.title(latLng.latitude + " : " + latLng.longitude);
+//                markerOptions.draggable(true);
+//                mMap.clear();
+//                mMap.addMarker(markerOptions);
+//
+//                // Animating to the touched position
+//                mMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
+//                mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
+//            }
+//        });
     }
 
 
