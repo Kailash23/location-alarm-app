@@ -16,7 +16,6 @@ import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
-import android.support.v4.app.ActivityCompat;
 import android.os.Bundle;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
@@ -27,7 +26,6 @@ import android.view.View;
 import android.view.Window;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -54,6 +52,9 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
+import butterknife.ButterKnife;
+import butterknife.OnClick;
+
 
 public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback,
         GoogleApiClient.ConnectionCallbacks,
@@ -66,13 +67,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     final static int REQUEST_LOCATION = 199;
     private static final int LOCATION_UPDATE_INTERVAL = 15000;
     private static final int LOCATION_UPDATE_FASTEST_INTERVAL = 10000;
+    public static  GoogleApiClient client;
     private final LatLng mDefaultLocation = new LatLng(-33.87365, 151.20689);
-    private ImageView locationPin;
+    PlaceAutocompleteFragment autocompleteFragment;
     private View mapView;
     private FusedLocationProviderClient mFusedLocationProviderClient;
     private Boolean exit = false;
-    private GoogleMap mMap;
-    private GoogleApiClient client;
+     static GoogleMap mMap;
     private Location mLastKnownLocation;
 
     @RequiresApi(api = Build.VERSION_CODES.M)
@@ -80,58 +81,16 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
-
-        locationPin = (ImageView) findViewById(R.id.location_pin);
-        locationPin.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                final LatLng target = mMap.getCameraPosition().target;
-                AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
-                View dialogView =
-                        LayoutInflater.from(MapsActivity.this).inflate(R.layout.dialog_box, null, false);
-                ((TextView) dialogView.findViewById(R.id.checkpoint_lat_tv)).setText(
-                        String.valueOf(target.latitude));
-                ((TextView) dialogView.findViewById(R.id.checkpoint_long_tv)).setText(
-                        String.valueOf(target.longitude));
-                final EditText nameEditText = dialogView.findViewById(R.id.checkpoint_name_tv);
-                final AlertDialog alertDialog = builder.setView(dialogView).show();
-                Button done = (Button) alertDialog.findViewById(R.id.dialogbox_done_btn);
-                done.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        String enteredText = nameEditText.getText().toString();
-                        if (enteredText.length() >= 3) {
-                            MarkerOptions markerOptions = new MarkerOptions();
-                            markerOptions.position(target);
-                            markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
-                            markerOptions.title(target.latitude + " : " + target.longitude);
-                            markerOptions.draggable(true);
-                            mMap.clear();
-                            mMap.addMarker(markerOptions);
-
-                            mMap.animateCamera(CameraUpdateFactory.newLatLng(target));
-                            mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
-                            alertDialog.dismiss();
-                        } else {
-                            nameEditText.setError("Name should have minimum of 4 characters.");
-                        }
-                    }
-                });
-
-                Button cancel = (Button) alertDialog.findViewById(R.id.dialogbox_cancel_btn);
-                cancel.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        alertDialog.dismiss();
-                    }
-                });
-
-            }
-        });
-
+        ButterKnife.bind(this);
         if (savedInstanceState != null) {
             mLastKnownLocation = savedInstanceState.getParcelable("location");
         }
+        setup();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    public void setup() {
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             Window window = getWindow();
             window.getDecorView().setSystemUiVisibility(
@@ -143,9 +102,23 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
         // Retrieve the PlaceAutocompleteFragment.
-        PlaceAutocompleteFragment autocompleteFragment = (PlaceAutocompleteFragment)
+        autocompleteFragment = (PlaceAutocompleteFragment)
                 getFragmentManager().findFragmentById(R.id.place_autocomplete_fragment);
+        autoCompleteSearch();
 
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Permissions.checkLocationPermission(this);
+        }
+
+        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.map);
+        mapView = mapFragment.getView();
+        mapFragment.getMapAsync(this);
+    }
+
+    public void autoCompleteSearch() {
         autocompleteFragment.setOnPlaceSelectedListener(new PlaceSelectionListener() {
             @Override
             public void onPlaceSelected(Place place) {
@@ -165,16 +138,53 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         Toast.LENGTH_SHORT).show();
             }
         });
+    }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            checkLocationPermission();
-        }
+    @OnClick(R.id.location_pin)
+    public void pinClicked(View v) {
+        final LatLng target = mMap.getCameraPosition().target;
+        AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
+        View dialogView =
+                LayoutInflater.from(MapsActivity.this).inflate(R.layout.dialog_box, null, false);
+        ((TextView) dialogView.findViewById(R.id.checkpoint_lat_tv)).setText(
+                String.valueOf(target.latitude));
+        ((TextView) dialogView.findViewById(R.id.checkpoint_long_tv)).setText(
+                String.valueOf(target.longitude));
+        final EditText nameEditText = dialogView.findViewById(R.id.checkpoint_name_tv);
+        final AlertDialog alertDialog = builder.setView(dialogView).show();
+        Button done = (Button) alertDialog.findViewById(R.id.dialogbox_done_btn);
+        assert done != null;
+        done.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String enteredText = nameEditText.getText().toString();
+                if (enteredText.length() >= 3) {
+                    MarkerOptions markerOptions = new MarkerOptions();
+                    markerOptions.position(target);
+                    markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
+                    markerOptions.title(enteredText);
+                    markerOptions.draggable(true);
+                    mMap.clear();
+                    mMap.addMarker(markerOptions);
 
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
-        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.map);
-        mapView = mapFragment.getView();
-        mapFragment.getMapAsync(this);
+                    mMap.animateCamera(CameraUpdateFactory.newLatLng(target));
+                    mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
+                    alertDialog.dismiss();
+                } else {
+                    nameEditText.setError("Name should have minimum of 4 characters.");
+                }
+            }
+        });
+
+        Button cancel = (Button) alertDialog.findViewById(R.id.dialogbox_cancel_btn);
+        assert cancel != null;
+        cancel.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                alertDialog.dismiss();
+            }
+        });
+
     }
 
     private void getDeviceLocation() {
@@ -204,25 +214,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
 
-    //Method for handling permission request response
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        switch (requestCode) {
-            case REQUEST_LOCATION_CODE:
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    //Permission is granted
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                        if (client == null) {
-                            buildGoogleApiClient();
-                        }
-                        mMap.setMyLocationEnabled(true);
-                    }
-                } else {
-                    //Permission is denied
-                    Toast.makeText(this, "Permission Denied by User!", Toast.LENGTH_LONG).show();
-                }
-        }
-    }
+
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
@@ -246,26 +238,26 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             mMap.setMyLocationEnabled(true);
             getDeviceLocation();
         }
-
-
-//        mMap.setOnMapLongClickListener(new GoogleMap.OnMapLongClickListener() {
-//            @Override
-//            public void onMapLongClick(LatLng latLng) {
-//                MarkerOptions markerOptions = new MarkerOptions();
-//                markerOptions.position(latLng);
-//                markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
-//                markerOptions.title(latLng.latitude + " : " + latLng.longitude);
-//                markerOptions.draggable(true);
-//                mMap.clear();
-//                mMap.addMarker(markerOptions);
-//
-//                // Animating to the touched position
-//                mMap.animateCamera(CameraUpdateFactory.newLatLng(latLng));
-//                mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
-//            }
-//        });
     }
-
+    //Method for handling permission request response
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_LOCATION_CODE:
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    //Permission is granted
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        if (MapsActivity.client == null) {
+                            buildGoogleApiClient();
+                        }
+                        MapsActivity.mMap.setMyLocationEnabled(true);
+                    }
+                } else {
+                    //Permission is denied
+                    Toast.makeText(this, "Permission Denied by User!", Toast.LENGTH_LONG).show();
+                }
+        }
+    }
 
     protected synchronized void buildGoogleApiClient() {
         //Google API Client Created
@@ -299,7 +291,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         locationRequest.setInterval(LOCATION_UPDATE_INTERVAL);
         locationRequest.setFastestInterval(LOCATION_UPDATE_FASTEST_INTERVAL);
-        locationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             LocationServices.FusedLocationApi.requestLocationUpdates(client, locationRequest, this);
         }
@@ -343,21 +335,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
     }
 
-    public Boolean checkLocationPermission() {
-        //If permission is not granted then we ask for permission
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            /*shouldShowRequestPermissionRationale - This method return true if app had requested permission previously and
-              and user denied the request*/
-            if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION_CODE);
-            } else {
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION_CODE);
-            }
-            //Return false if user has chosen don't ask again method when previously asked for permission
-            return false;
-        } else
-            return true;
-    }
+
 
     @Override
     public void onConnectionSuspended(int i) {
