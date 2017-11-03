@@ -1,7 +1,13 @@
 package com.juggernaut.location_alarm;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.IntentSender;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.location.Location;
 
@@ -13,11 +19,14 @@ import com.google.android.gms.location.LocationListener;
 
 import android.os.Build;
 import android.os.Handler;
+import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -60,33 +69,62 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         GoogleApiClient.ConnectionCallbacks,
         GoogleMap.OnMyLocationButtonClickListener,
         GoogleApiClient.OnConnectionFailedListener,
-        GoogleMap.OnMyLocationClickListener,
-        LocationListener {
+        GoogleMap.OnMyLocationClickListener, LocationListener {
 
     public static final int REQUEST_LOCATION_CODE = 99;
     final static int REQUEST_LOCATION = 199;
+    private static final int ZOOM_LEVEL = 14;
     private static final int LOCATION_UPDATE_INTERVAL = 15000;
     private static final int LOCATION_UPDATE_FASTEST_INTERVAL = 10000;
-    public static  GoogleApiClient client;
+    public static GoogleApiClient client;
+    static GoogleMap mMap;
     private final LatLng mDefaultLocation = new LatLng(-33.87365, 151.20689);
+    LocationRequest locationRequest;
     PlaceAutocompleteFragment autocompleteFragment;
     private View mapView;
     private FusedLocationProviderClient mFusedLocationProviderClient;
     private Boolean exit = false;
-     static GoogleMap mMap;
     private Location mLastKnownLocation;
+    // The BroadcastReceiver used to listen from broadcasts from the service.
+    private MyReceiver myReceiver;
+    // A reference to the service used to get location updates.
+    private LocationService mService = null;
+    // Tracks the bound state of the service.
+    private boolean mBound = false;
+    // Monitors the state of the connection to the service.
+    private final ServiceConnection mServiceConnection = new ServiceConnection() {
+        // Called when a connection  to the Service has been established, with the
+        // {@link android.os.IBinder} of the communication channel to the Service.
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            LocationService.LocalBinder binder = (LocationService.LocalBinder) service;
+            mService = binder.getService();
+            mBound = true;
+        }
+
+        //Called when a connection to the Service has been lost.
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            mService = null;
+            mBound = false;
+        }
+    };
+
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_maps);
         ButterKnife.bind(this);
+
         if (savedInstanceState != null) {
             mLastKnownLocation = savedInstanceState.getParcelable("location");
         }
         setup();
     }
+
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     public void setup() {
@@ -106,16 +144,29 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 getFragmentManager().findFragmentById(R.id.place_autocomplete_fragment);
         autoCompleteSearch();
 
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Permissions.checkLocationPermission(this);
-        }
-
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapView = mapFragment.getView();
         mapFragment.getMapAsync(this);
+
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        myReceiver = new MyReceiver();
+        // Bind to the service. If the service is in foreground mode, this signals to the service
+        // that since this activity is in the foreground, the service can exit foreground mode.
+        if (checkPermissions()) {
+            bindService(new Intent(this, LocationService.class), mServiceConnection,
+                    Context.BIND_AUTO_CREATE);
+        } else {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                checkLocationPermission();
+            }
+        }
     }
 
     public void autoCompleteSearch() {
@@ -126,8 +177,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 coordinate = place.getLatLng();
 
                 CameraUpdate location = CameraUpdateFactory.newLatLngZoom(
-                        coordinate, 14);
-
+                        coordinate, ZOOM_LEVEL);
 
                 mMap.animateCamera(location);
             }
@@ -142,6 +192,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @OnClick(R.id.location_pin)
     public void pinClicked(View v) {
+
         final LatLng target = mMap.getCameraPosition().target;
         AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
         View dialogView =
@@ -169,7 +220,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                     mMap.animateCamera(CameraUpdateFactory.newLatLng(target));
                     mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
+                    if (!checkPermissions()) {
+                        checkLocationPermission();
+                    } else {
+                        mService.requestLocationUpdates();
+                    }
                     alertDialog.dismiss();
+
                 } else {
                     nameEditText.setError("Name should have minimum of 4 characters.");
                 }
@@ -185,6 +242,22 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         });
 
+    }
+
+    public Boolean checkLocationPermission() {
+        //If permission is not granted then we ask for permission
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            /*shouldShowRequestPermissionRationale - This method return true if app had requested permission previously and
+              and user denied the request*/
+            if (ActivityCompat.shouldShowRequestPermissionRationale(MapsActivity.this, Manifest.permission.ACCESS_FINE_LOCATION)) {
+                ActivityCompat.requestPermissions(MapsActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION_CODE);
+            } else {
+                ActivityCompat.requestPermissions(MapsActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION_CODE);
+            }
+            //Return false if user has chosen don't ask again method when previously asked for permission
+            return false;
+        } else
+            return true;
     }
 
     private void getDeviceLocation() {
@@ -213,8 +286,16 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    protected synchronized void buildGoogleApiClient() {
+        //Google API Client Created
+        client = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .build();
 
-
+        client.connect();
+    }
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
@@ -239,6 +320,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             getDeviceLocation();
         }
     }
+
     //Method for handling permission request response
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
@@ -246,6 +328,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             case REQUEST_LOCATION_CODE:
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     //Permission is granted
+                    bindService(new Intent(this, LocationService.class), mServiceConnection,
+                            Context.BIND_AUTO_CREATE);
+
                     if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                         if (MapsActivity.client == null) {
                             buildGoogleApiClient();
@@ -259,16 +344,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    protected synchronized void buildGoogleApiClient() {
-        //Google API Client Created
-        client = new GoogleApiClient.Builder(this)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .addApi(LocationServices.API)
-                .build();
-
-        client.connect();
-    }
 
     @Override
     public void onLocationChanged(Location location) {
@@ -277,7 +352,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         LatLng locChangedCoordinates = new LatLng(location.getLatitude(), location.getLongitude());
 
         mMap.moveCamera(CameraUpdateFactory.newLatLng(locChangedCoordinates));
-        mMap.animateCamera(CameraUpdateFactory.zoomBy(14));
+        mMap.animateCamera(CameraUpdateFactory.zoomBy(ZOOM_LEVEL));
 
         if (client != null) {
             LocationServices.FusedLocationApi.removeLocationUpdates(client, this);
@@ -287,14 +362,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
-        LocationRequest locationRequest = new LocationRequest();
 
-        locationRequest.setInterval(LOCATION_UPDATE_INTERVAL);
-        locationRequest.setFastestInterval(LOCATION_UPDATE_FASTEST_INTERVAL);
-        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            LocationServices.FusedLocationApi.requestLocationUpdates(client, locationRequest, this);
-        }
+        requestLocationUpdate();
 
         // For dialog Box that ask for enabling GPS
         LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
@@ -335,7 +404,21 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
     }
 
+    private boolean checkPermissions() {
+        return PackageManager.PERMISSION_GRANTED == ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION);
+    }
 
+    private void requestLocationUpdate() {
+        locationRequest = new LocationRequest();
+        locationRequest.setInterval(LOCATION_UPDATE_INTERVAL);
+        locationRequest.setFastestInterval(LOCATION_UPDATE_FASTEST_INTERVAL);
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationServices.FusedLocationApi.requestLocationUpdates(client, locationRequest, this);
+        }
+    }
 
     @Override
     public void onConnectionSuspended(int i) {
@@ -380,4 +463,46 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         acc = (int) location.getAccuracy();
         Toast.makeText(this, "Accuracy: " + acc + " m\n(" + lat + ", " + lng + ")", Toast.LENGTH_SHORT).show();
     }
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        LocalBroadcastManager.getInstance(this).registerReceiver(myReceiver,
+                new IntentFilter(LocationService.ACTION_BROADCAST));
+    }
+
+    @Override
+    protected void onPause() {
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(myReceiver);
+        super.onPause();
+    }
+
+    @Override
+    protected void onStop() {
+        if (mBound) {
+            // Unbind from the service. This signals to the service that this activity is no longer
+            // in the foreground, and the service can respond by promoting itself to a foreground
+            // service.
+            unbindService(mServiceConnection);
+            mBound = false;
+        }
+        super.onStop();
+    }
+
+    /**
+     * Receiver for broadcasts sent by {@link LocationService}.
+     */
+    private class MyReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Location location = intent.getParcelableExtra(LocationService.EXTRA_LOCATION);
+            if (location != null) {
+                Toast.makeText(MapsActivity.this, Utils.getLocationText(location),
+                        Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+
 }
