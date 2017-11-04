@@ -215,7 +215,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 String.valueOf(targetCoordinate.longitude));
         final EditText nameEditText = dialogView.findViewById(R.id.checkpoint_name_tv);
         final AlertDialog alertDialog = builder.setView(dialogView).show();
-        Button done = (Button) alertDialog.findViewById(R.id.dialogbox_done_btn);
+        Button done = alertDialog.findViewById(R.id.dialogbox_done_btn);
         assert done != null;
         done.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -227,6 +227,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     Location.distanceBetween(currentLatitude, currentLongitude, latitude, longitude, results);
                     if (results[0] < LocationService.MAX_DISTANCE_RANGE) {
                         Toast.makeText(getApplicationContext(), "You are already near to the destination", Toast.LENGTH_SHORT).show();
+                    } else {
                         MarkerOptions markerOptions = new MarkerOptions();
                         markerOptions.position(targetCoordinate);
                         markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
@@ -243,23 +244,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                             mService.requestLocationUpdates();
                         }
                         alertDialog.dismiss();
-                    } else {
-//                        MarkerOptions markerOptions = new MarkerOptions();
-//                        markerOptions.position(targetCoordinate);
-//                        markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
-//                        markerOptions.title(enteredText);
-//                        markerOptions.draggable(true);
-//                        mMap.clear();
-//                        mMap.addMarker(markerOptions);
-//                        mMap.animateCamera(CameraUpdateFactory.newLatLng(targetCoordinate));
-//                        mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
-//
-//                        if (!checkPermissions()) {
-//                            checkLocationPermission();
-//                        } else {
-//                            mService.requestLocationUpdates();
-//                        }
-//                        alertDialog.dismiss();
                     }
 
                 } else {
@@ -268,7 +252,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         });
 
-        Button cancel = (Button) alertDialog.findViewById(R.id.dialogbox_cancel_btn);
+        Button cancel = alertDialog.findViewById(R.id.dialogbox_cancel_btn);
         assert cancel != null;
         cancel.setOnClickListener(new View.OnClickListener() {
             @Override
