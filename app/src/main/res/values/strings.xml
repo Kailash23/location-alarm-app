@@ -4,7 +4,8 @@
     <string name="done">Done</string>
     <string name="cancel">Cancel</string>
     <string name="check_point_name_hint">Enter alarm name for this checkpoint</string>
-
+    <string name="content">Destination Reached</string>
+    <string name="btnlabel">dismiss</string>
     <string name="launch_activity">Launch activity</string>
     <string name="location_unknown">Location unknown</string>
     <string name="location_updates_label">Location Updates</string>

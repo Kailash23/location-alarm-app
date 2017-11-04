@@ -78,6 +78,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int LOCATION_UPDATE_FASTEST_INTERVAL = 10000;
     public static GoogleApiClient client;
     static GoogleMap mMap;
+    static double latitude;
+    static double longitude;
+    static double currentLatitude;
+    static double currentLongitude;
     private final LatLng mDefaultLocation = new LatLng(-33.87365, 151.20689);
     LocationRequest locationRequest;
     PlaceAutocompleteFragment autocompleteFragment;
@@ -110,6 +114,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     };
 
+    public static double getLatitude() {
+        return latitude;
+    }
+
+    public static double getLongitude() {
+        return longitude;
+    }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
@@ -124,7 +135,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
         setup();
     }
-
 
     @RequiresApi(api = Build.VERSION_CODES.M)
     public void setup() {
@@ -193,14 +203,16 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @OnClick(R.id.location_pin)
     public void pinClicked(View v) {
 
-        final LatLng target = mMap.getCameraPosition().target;
+        final LatLng targetCoordinate = mMap.getCameraPosition().target;
+        latitude = targetCoordinate.latitude;
+        longitude = targetCoordinate.longitude;
         AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
         View dialogView =
                 LayoutInflater.from(MapsActivity.this).inflate(R.layout.dialog_box, null, false);
         ((TextView) dialogView.findViewById(R.id.checkpoint_lat_tv)).setText(
-                String.valueOf(target.latitude));
+                String.valueOf(targetCoordinate.latitude));
         ((TextView) dialogView.findViewById(R.id.checkpoint_long_tv)).setText(
-                String.valueOf(target.longitude));
+                String.valueOf(targetCoordinate.longitude));
         final EditText nameEditText = dialogView.findViewById(R.id.checkpoint_name_tv);
         final AlertDialog alertDialog = builder.setView(dialogView).show();
         Button done = (Button) alertDialog.findViewById(R.id.dialogbox_done_btn);
@@ -210,22 +222,45 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             public void onClick(View v) {
                 String enteredText = nameEditText.getText().toString();
                 if (enteredText.length() >= 3) {
-                    MarkerOptions markerOptions = new MarkerOptions();
-                    markerOptions.position(target);
-                    markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
-                    markerOptions.title(enteredText);
-                    markerOptions.draggable(true);
-                    mMap.clear();
-                    mMap.addMarker(markerOptions);
 
-                    mMap.animateCamera(CameraUpdateFactory.newLatLng(target));
-                    mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
-                    if (!checkPermissions()) {
-                        checkLocationPermission();
+                    float[] results = new float[3];
+                    Location.distanceBetween(currentLatitude, currentLongitude, latitude, longitude, results);
+                    if (results[0] < LocationService.MAX_DISTANCE_RANGE) {
+                        Toast.makeText(getApplicationContext(), "You are already near to the destination", Toast.LENGTH_SHORT).show();
+                        MarkerOptions markerOptions = new MarkerOptions();
+                        markerOptions.position(targetCoordinate);
+                        markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
+                        markerOptions.title(enteredText);
+                        markerOptions.draggable(true);
+                        mMap.clear();
+                        mMap.addMarker(markerOptions);
+                        mMap.animateCamera(CameraUpdateFactory.newLatLng(targetCoordinate));
+                        mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
+
+                        if (!checkPermissions()) {
+                            checkLocationPermission();
+                        } else {
+                            mService.requestLocationUpdates();
+                        }
+                        alertDialog.dismiss();
                     } else {
-                        mService.requestLocationUpdates();
+//                        MarkerOptions markerOptions = new MarkerOptions();
+//                        markerOptions.position(targetCoordinate);
+//                        markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
+//                        markerOptions.title(enteredText);
+//                        markerOptions.draggable(true);
+//                        mMap.clear();
+//                        mMap.addMarker(markerOptions);
+//                        mMap.animateCamera(CameraUpdateFactory.newLatLng(targetCoordinate));
+//                        mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
+//
+//                        if (!checkPermissions()) {
+//                            checkLocationPermission();
+//                        } else {
+//                            mService.requestLocationUpdates();
+//                        }
+//                        alertDialog.dismiss();
                     }
-                    alertDialog.dismiss();
 
                 } else {
                     nameEditText.setError("Name should have minimum of 4 characters.");
@@ -243,6 +278,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
 
     }
+
 
     public Boolean checkLocationPermission() {
         //If permission is not granted then we ask for permission
@@ -270,10 +306,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     if (task.isSuccessful()) {
                         // Set the map's camera position to the current location of the device.
                         mLastKnownLocation = (Location) task.getResult();
+                        currentLatitude = mLastKnownLocation.getLatitude();
+                        currentLongitude = mLastKnownLocation.getLongitude();
                         if (mLastKnownLocation != null) {
                             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                     new LatLng(mLastKnownLocation.getLatitude(),
                                             mLastKnownLocation.getLongitude()), 1));
+
                         }
                     } else {
                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mDefaultLocation, 5));
@@ -450,7 +489,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public boolean onMyLocationButtonClick() {
-        Toast.makeText(this, "Current Location", Toast.LENGTH_SHORT).show();
         return false;
     }
 

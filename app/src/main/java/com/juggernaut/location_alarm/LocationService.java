@@ -9,17 +9,23 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.location.Location;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.Vibrator;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
+import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
@@ -30,26 +36,24 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
 
+
 /**
  * Created by Kailash on 10/30/2017.
  */
 
 public class LocationService extends Service {
 
+    public final static int MAX_DISTANCE_RANGE = 100;
     private static final String PACKAGE_NAME = "com.juggernaut.location_alarm";
-
     static final String ACTION_BROADCAST = PACKAGE_NAME + ".broadcast";
-
     static final String EXTRA_LOCATION = PACKAGE_NAME + ".location";
-
     private static final String EXTRA_STARTED_FROM_NOTIFICATION = PACKAGE_NAME +
             ".started_from_notification";
-
     private static final String TAG = LocationService.class.getSimpleName();
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
      */
-    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
+    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 20000;
     /**
      * The fastest rate for active location updates. Updates will never be more frequent
      * than this value.
@@ -60,6 +64,13 @@ public class LocationService extends Service {
      * The identifier for the notification displayed for the foreground service.
      */
     private static final int NOTIFICATION_ID = 12345678;
+    private final static int DURATION_OF_VIBRATION = 1000;
+    private final static int VIBRATE_DELAY_TIME = 2000;
+    private final static int VOLUME_INCREASE_DELAY = 600;
+    // Volume level increasing step
+    private final static float VOLUME_INCREASE_STEP = 0.01f;
+    // Max player volume level
+    private final static float MAX_VOLUME = 1.0f;
     /**
      * When creating a service that provides binding, you must provide an IBinder
      * that provides the programming interface that clients can use to interact with the service.
@@ -72,35 +83,66 @@ public class LocationService extends Service {
      * place.
      */
     private boolean mChangingConfiguration = false;
-
     private NotificationManager mNotificationManager;
-
     /**
      * Contains parameters used by {@link com.google.android.gms.location.FusedLocationProviderApi}.
      */
     private LocationRequest mLocationRequest;
-
     /**
      * Provides access to the Fused Location Provider API.
      */
     private FusedLocationProviderClient mFusedLocationClient;
-
     /**
      * Callback for changes in location.
      */
     private LocationCallback mLocationCallback;
-
     /**
      * A Handler allows you to send and process Message and Runnable objects associated with a
      * thread's MessageQueue. Each Handler instance is associated with a single thread and that
      * thread's message queue
      */
     private Handler mServiceHandler;
-
     /**
      * The current location.
      */
     private Location mLocation;
+    private MediaPlayer mPlayer;
+    private Handler mHandler = new Handler();
+    private float mVolumeLevel = 0;
+    private Vibrator mVibrator;
+    private boolean isAlarmRinging = false;
+
+    private Runnable mVibrationRunnable = new Runnable() {
+        @Override
+        public void run() {
+            mVibrator.vibrate(DURATION_OF_VIBRATION);
+            // Provide loop for vibration
+            mHandler.postDelayed(mVibrationRunnable,
+                    DURATION_OF_VIBRATION + VIBRATE_DELAY_TIME);
+        }
+    };
+
+    private Runnable mVolumeRunnable = new Runnable() {
+        @Override
+        public void run() {
+            // increase volume level until reach max value
+            if (mPlayer != null && mVolumeLevel < MAX_VOLUME) {
+                mVolumeLevel += VOLUME_INCREASE_STEP;
+                mPlayer.setVolume(mVolumeLevel, mVolumeLevel);
+                // set next increase in 600ms
+                mHandler.postDelayed(mVolumeRunnable, VOLUME_INCREASE_DELAY);
+            }
+        }
+    };
+
+    private MediaPlayer.OnErrorListener mErrorListener = new MediaPlayer.OnErrorListener() {
+        @Override
+        public boolean onError(MediaPlayer mp, int what, int extra) {
+            stopPlayer();
+            LocationService.this.stopSelf();
+            return true;
+        }
+    };
 
     public LocationService() {
     }
@@ -127,6 +169,7 @@ public class LocationService extends Service {
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.ECLAIR)
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "Service started");
@@ -136,9 +179,11 @@ public class LocationService extends Service {
         // We got here because the user decided to remove location updates from the notification.
         if (startedFromNotification) {
             removeLocationUpdates();
+            MapsActivity.mMap.clear();
             stopSelf();
+            stopPlayer();
         }
-        // Tells the system to not try to recreate the service after it has been killed.
+        // Tells the system not to try to recreate the service after it has been killed.
         return START_NOT_STICKY;
     }
 
@@ -148,6 +193,7 @@ public class LocationService extends Service {
         mChangingConfiguration = true;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.ECLAIR)
     @Override
     public IBinder onBind(Intent intent) {
         // Called when a client (MainActivity in case of this sample) comes to the foreground
@@ -159,6 +205,7 @@ public class LocationService extends Service {
         return mBinder;
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.ECLAIR)
     @Override
     public void onRebind(Intent intent) {
         // Called when a client (MainActivity in case of this sample) returns to the foreground
@@ -180,15 +227,6 @@ public class LocationService extends Service {
         // do nothing. Otherwise, we make this service a foreground service.
         if (!mChangingConfiguration) {
             Log.i(TAG, "Starting foreground service");
-            /*
-            // TODO(developer). If targeting O, use the following code.
-            if (Build.VERSION.SDK_INT == Build.VERSION_CODES.O) {
-                mNotificationManager.startServiceInForeground(new Intent(this,
-                        LocationUpdatesService.class), NOTIFICATION_ID, getNotification());
-            } else {
-                startForeground(NOTIFICATION_ID, getNotification());
-            }
-             */
             startForeground(NOTIFICATION_ID, getNotification());
         }
         return true; // Ensures onRebind() is called when a client re-binds.
@@ -290,6 +328,16 @@ public class LocationService extends Service {
 
         mLocation = location;
 
+        float[] results = new float[3];
+
+        Location.distanceBetween(location.getLatitude(), location.getLongitude(), MapsActivity.getLatitude(), MapsActivity.getLongitude(), results);
+        if (results[0] < MAX_DISTANCE_RANGE) {
+            Toast.makeText(getApplicationContext(), "Destination Reached", Toast.LENGTH_SHORT).show();
+            if (!isAlarmRinging) {
+                startAlarm();
+            }
+        }
+
         // Notify anyone listening for broadcasts about the new location.
         Intent intent = new Intent(ACTION_BROADCAST);
         intent.putExtra(EXTRA_LOCATION, location);
@@ -299,6 +347,54 @@ public class LocationService extends Service {
         if (serviceIsRunningInForeground(this)) {
             mNotificationManager.notify(NOTIFICATION_ID, getNotification());
         }
+    }
+
+    private void stopPlayer() {
+        isAlarmRinging = false;
+        if (mPlayer != null) {
+            mPlayer.stop();
+            mPlayer.release();
+            mHandler.removeCallbacksAndMessages(null);
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
+    private void startAlarm() {
+        mPlayer = new MediaPlayer();
+        mPlayer.setOnErrorListener(mErrorListener);
+
+        try {
+            isAlarmRinging = true;
+            mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            mHandler.post(mVibrationRunnable);
+            String ringtone;
+            ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM).toString();
+            mPlayer.setDataSource(this, Uri.parse(ringtone));
+            mPlayer.setLooping(true);
+            mPlayer.setAudioStreamType(AudioManager.STREAM_ALARM);
+            mPlayer.setVolume(mVolumeLevel, mVolumeLevel);
+            mPlayer.prepare();
+            mPlayer.start();
+            LocationService.this.stopSelf();
+            mPlayer.setVolume(MAX_VOLUME, MAX_VOLUME);
+
+            Notification noti = new Notification.Builder(getApplicationContext())
+                    .setContentTitle("Location Reached")
+                    .setContentText("You reached Destination.")
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setAutoCancel(true)
+                    .build();
+            NotificationManager manager = (NotificationManager) getApplicationContext().getSystemService(NOTIFICATION_SERVICE);
+            noti.flags |= Notification.FLAG_AUTO_CANCEL;
+            manager.notify(0, noti);
+        } catch (Exception e) {
+            isAlarmRinging = false;
+            if (mPlayer.isPlaying()) {
+                mPlayer.stop();
+            }
+            stopSelf();
+        }
+
     }
 
     /**
