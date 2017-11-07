@@ -20,6 +20,7 @@ import com.google.android.gms.location.LocationListener;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.RequiresApi;
@@ -83,6 +84,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     static double currentLatitude;
     static double currentLongitude;
     private final LatLng mDefaultLocation = new LatLng(-33.87365, 151.20689);
+    protected PowerManager.WakeLock mWakeLock;
     LocationRequest locationRequest;
     PlaceAutocompleteFragment autocompleteFragment;
     private View mapView;
@@ -126,8 +128,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_maps);
+        final PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        this.mWakeLock = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "My Tag");
+        this.mWakeLock.acquire();
         ButterKnife.bind(this);
 
         if (savedInstanceState != null) {
@@ -510,6 +514,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             mBound = false;
         }
         super.onStop();
+    }
+
+    @Override
+    public void onDestroy() {
+        this.mWakeLock.release();
+        super.onDestroy();
     }
 
     /**
