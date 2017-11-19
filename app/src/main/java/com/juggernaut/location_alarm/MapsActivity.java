@@ -1,6 +1,7 @@
 package com.juggernaut.location_alarm;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
@@ -83,14 +84,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     static double longitude;
     static double currentLatitude;
     static double currentLongitude;
-    private final LatLng mDefaultLocation = new LatLng(-33.87365, 151.20689);
+    private final LatLng mDefaultLocation = new LatLng(26.841437961593883, 75.56181874126197);
+    public Location mLastKnownLocation;
     protected PowerManager.WakeLock mWakeLock;
     LocationRequest locationRequest;
     PlaceAutocompleteFragment autocompleteFragment;
     private View mapView;
     private FusedLocationProviderClient mFusedLocationProviderClient;
     private Boolean exit = false;
-    private Location mLastKnownLocation;
     // The BroadcastReceiver used to listen from broadcasts from the service.
     private MyReceiver myReceiver;
     // A reference to the service used to get location updates.
@@ -133,7 +134,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (pm != null) {
             this.mWakeLock = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "My Tag");
         }
-        this.mWakeLock.acquire(10*60*1000L /*10 minutes*/);
+        this.mWakeLock.acquire(10 * 60 * 1000L /*10 minutes*/);
         ButterKnife.bind(this);
 
         if (savedInstanceState != null) {
@@ -206,6 +207,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
     }
 
+    @SuppressLint("SetTextI18n")
     @OnClick(R.id.location_pin)
     public void pinClicked(View v) {
 
@@ -215,9 +217,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
         View dialogView =
                 LayoutInflater.from(MapsActivity.this).inflate(R.layout.dialog_box, null, false);
-        ((TextView) dialogView.findViewById(R.id.checkpoint_lat_tv)).setText(
+        ((TextView) dialogView.findViewById(R.id.checkpoint_lat_tv)).setText("Latitude: " +
                 String.valueOf(targetCoordinate.latitude));
-        ((TextView) dialogView.findViewById(R.id.checkpoint_long_tv)).setText(
+        ((TextView) dialogView.findViewById(R.id.checkpoint_long_tv)).setText("Longitude: " +
                 String.valueOf(targetCoordinate.longitude));
         final EditText nameEditText = dialogView.findViewById(R.id.checkpoint_name_tv);
         final AlertDialog alertDialog = builder.setView(dialogView).show();
@@ -270,7 +272,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
 
-    public Boolean checkLocationPermission() {
+    public void checkLocationPermission() {
         //If permission is not granted then we ask for permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             /*shouldShowRequestPermissionRationale - This method return true if app had requested permission previously and
@@ -281,33 +283,35 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 ActivityCompat.requestPermissions(MapsActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION_CODE);
             }
             //Return false if user has chosen don't ask again method when previously asked for permission
-            return false;
-        } else
-            return true;
+        }
     }
 
     private void getDeviceLocation() {
 
+          /*
+         * Get the best and most recent location of the device, which may be null in rare
+         * cases when a location is not available.
+         */
         try {
-            Task locationResult = mFusedLocationProviderClient.getLastLocation();
-            locationResult.addOnCompleteListener(this, new OnCompleteListener() {
+            Task<Location> locationResult = mFusedLocationProviderClient.getLastLocation();
+            locationResult.addOnCompleteListener(this, new OnCompleteListener<Location>() {
                 @Override
-                public void onComplete(@NonNull Task task) {
+                public void onComplete(@NonNull Task<Location> task) {
                     if (task.isSuccessful()) {
                         // Set the map's camera position to the current location of the device.
-
+                        mLastKnownLocation = task.getResult();
+                        currentLatitude = mLastKnownLocation.getLatitude();
+                        currentLongitude = mLastKnownLocation.getLongitude();
                         if (mLastKnownLocation != null) {
-                            mLastKnownLocation = (Location) task.getResult();
-                            currentLatitude = mLastKnownLocation.getLatitude();
-                            currentLongitude = mLastKnownLocation.getLongitude();
                             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                     new LatLng(mLastKnownLocation.getLatitude(),
                                             mLastKnownLocation.getLongitude()), 1));
 
+                        } else {
+                            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mDefaultLocation, 1));
+                            mMap.getUiSettings().setMyLocationButtonEnabled(true);
+                            Toast.makeText(getApplicationContext(), "Default Location", Toast.LENGTH_LONG).show();
                         }
-                    } else {
-                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mDefaultLocation, 5));
-                        mMap.getUiSettings().setMyLocationButtonEnabled(false);
                     }
                 }
             });
@@ -380,10 +384,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         //Get lat and lng of new location
         LatLng locChangedCoordinates = new LatLng(location.getLatitude(), location.getLongitude());
-
         mMap.moveCamera(CameraUpdateFactory.newLatLng(locChangedCoordinates));
         mMap.animateCamera(CameraUpdateFactory.zoomBy(ZOOM_LEVEL));
-
         if (client != null) {
             LocationServices.FusedLocationApi.removeLocationUpdates(client, this);
         }
@@ -499,6 +501,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         super.onResume();
         LocalBroadcastManager.getInstance(this).registerReceiver(myReceiver,
                 new IntentFilter(LocationService.ACTION_BROADCAST));
+
     }
 
     @Override
@@ -523,6 +526,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onDestroy() {
         this.mWakeLock.release();
         super.onDestroy();
+
     }
 
     /**

@@ -36,7 +36,6 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
 
 
-
 /**
  * Created by Kailash on 10/30/2017.
  */
@@ -71,12 +70,14 @@ public class LocationService extends Service {
     private final static float VOLUME_INCREASE_STEP = 0.01f;
     // Max player volume level
     private final static float MAX_VOLUME = 1.0f;
+    private static MediaPlayer mPlayer;
+    private static Handler mHandler = new Handler();
+    private static boolean isAlarmRinging = false;
     /**
      * When creating a service that provides binding, you must provide an IBinder
      * that provides the programming interface that clients can use to interact with the service.
      */
     private final IBinder mBinder = new LocalBinder();
-
     /**
      * Used to check whether the bound activity has really gone away and not unbound as part of an
      * orientation change. We create a foreground service notification only if the former takes
@@ -106,12 +107,8 @@ public class LocationService extends Service {
      * The current location.
      */
     private Location mLocation;
-    private MediaPlayer mPlayer;
-    private Handler mHandler = new Handler();
     private float mVolumeLevel = 0;
     private Vibrator mVibrator;
-    private boolean isAlarmRinging = false;
-
     private Runnable mVibrationRunnable = new Runnable() {
         @Override
         public void run() {
@@ -262,10 +259,8 @@ public class LocationService extends Service {
         Log.i(TAG, "Removing location updates");
         try {
             mFusedLocationClient.removeLocationUpdates(mLocationCallback);
-
             stopSelf();
         } catch (SecurityException unlikely) {
-
             Log.e(TAG, "Lost location permission. Could not remove updates. " + unlikely);
         }
     }
@@ -325,16 +320,16 @@ public class LocationService extends Service {
     @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN)
     private void onNewLocation(Location location) {
         Log.i(TAG, "New location: " + location);
-
         mLocation = location;
-
         float[] results = new float[3];
-
         Location.distanceBetween(location.getLatitude(), location.getLongitude(), MapsActivity.getLatitude(), MapsActivity.getLongitude(), results);
         if (results[0] < MAX_DISTANCE_RANGE) {
             Toast.makeText(getApplicationContext(), "Destination Reached", Toast.LENGTH_SHORT).show();
             if (!isAlarmRinging) {
                 startAlarm();
+                Intent intent = new Intent(this, AlarmActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
             }
         }
 
@@ -349,7 +344,7 @@ public class LocationService extends Service {
         }
     }
 
-    private void stopPlayer() {
+    static void stopPlayer() {
         isAlarmRinging = false;
         if (mPlayer != null) {
             mPlayer.stop();
@@ -375,6 +370,7 @@ public class LocationService extends Service {
             mPlayer.setVolume(mVolumeLevel, mVolumeLevel);
             mPlayer.prepare();
             mPlayer.start();
+            removeLocationUpdates();
             LocationService.this.stopSelf();
             mPlayer.setVolume(MAX_VOLUME, MAX_VOLUME);
 
@@ -386,7 +382,9 @@ public class LocationService extends Service {
                     .build();
             NotificationManager manager = (NotificationManager) getApplicationContext().getSystemService(NOTIFICATION_SERVICE);
             noti.flags |= Notification.FLAG_AUTO_CANCEL;
-            manager.notify(0, noti);
+            if (manager != null) {
+                manager.notify(0, noti);
+            }
         } catch (Exception e) {
             isAlarmRinging = false;
             if (mPlayer.isPlaying()) {
@@ -394,7 +392,6 @@ public class LocationService extends Service {
             }
             stopSelf();
         }
-
     }
 
     /**
@@ -415,11 +412,13 @@ public class LocationService extends Service {
     public boolean serviceIsRunningInForeground(Context context) {
         ActivityManager manager = (ActivityManager) context.getSystemService(
                 Context.ACTIVITY_SERVICE);
-        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(
-                Integer.MAX_VALUE)) {
-            if (getClass().getName().equals(service.service.getClassName())) {
-                if (service.foreground) {
-                    return true;
+        if (manager != null) {
+            for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(
+                    Integer.MAX_VALUE)) {
+                if (getClass().getName().equals(service.service.getClassName())) {
+                    if (service.foreground) {
+                        return true;
+                    }
                 }
             }
         }
