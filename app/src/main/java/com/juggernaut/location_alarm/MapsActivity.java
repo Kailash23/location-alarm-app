@@ -287,7 +287,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void getDeviceLocation() {
-
           /*
          * Get the best and most recent location of the device, which may be null in rare
          * cases when a location is not available.
@@ -300,9 +299,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     if (task.isSuccessful()) {
                         // Set the map's camera position to the current location of the device.
                         mLastKnownLocation = task.getResult();
-                        currentLatitude = mLastKnownLocation.getLatitude();
-                        currentLongitude = mLastKnownLocation.getLongitude();
+
                         if (mLastKnownLocation != null) {
+                            currentLatitude = mLastKnownLocation.getLatitude();
+                            currentLongitude = mLastKnownLocation.getLongitude();
                             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                     new LatLng(mLastKnownLocation.getLatitude(),
                                             mLastKnownLocation.getLongitude()), 1));
