@@ -144,6 +144,15 @@ public class LocationService extends Service {
     public LocationService() {
     }
 
+    static void stopPlayer() {
+        isAlarmRinging = false;
+        if (mPlayer != null) {
+            mPlayer.stop();
+            mPlayer.release();
+            mHandler.removeCallbacksAndMessages(null);
+        }
+    }
+
     @Override
     public void onCreate() {
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
@@ -341,15 +350,6 @@ public class LocationService extends Service {
         // Update notification content if running as a foreground service.
         if (serviceIsRunningInForeground(this)) {
             mNotificationManager.notify(NOTIFICATION_ID, getNotification());
-        }
-    }
-
-    static void stopPlayer() {
-        isAlarmRinging = false;
-        if (mPlayer != null) {
-            mPlayer.stop();
-            mPlayer.release();
-            mHandler.removeCallbacksAndMessages(null);
         }
     }
 

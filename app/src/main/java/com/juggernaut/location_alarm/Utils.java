@@ -1,5 +1,6 @@
 package com.juggernaut.location_alarm;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.location.Location;
 
@@ -21,6 +22,7 @@ public class Utils {
                 "(" + location.getLatitude() + ", " + location.getLongitude() + ")";
     }
 
+    @SuppressLint("StringFormatInvalid")
     static String getLocationTitle(Context context) {
         return context.getString(R.string.location_updated,
                 DateFormat.getDateTimeInstance().format(new Date()));
