@@ -11,7 +11,7 @@ import java.util.Date;
  * Created by Kailash on 10/31/2017.
  */
 
-public class Utils {
+class Utils {
     /**
      * Returns the {@code location} object as a human readable string.
      *

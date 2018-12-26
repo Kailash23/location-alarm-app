@@ -9,13 +9,12 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class AlarmActivity extends AppCompatActivity {
-    private View dismissButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_alarm);
-        dismissButton = findViewById(R.id.dismiss_btn);
+        View dismissButton = findViewById(R.id.dismiss_btn);
         dismissButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {

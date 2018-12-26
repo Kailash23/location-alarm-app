@@ -47,7 +47,6 @@ import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.LocationSettingsRequest;
 import com.google.android.gms.location.LocationSettingsResult;
-import com.google.android.gms.location.LocationSettingsStates;
 import com.google.android.gms.location.LocationSettingsStatusCodes;
 import com.google.android.gms.location.places.Place;
 import com.google.android.gms.location.places.ui.PlaceAutocompleteFragment;
@@ -76,8 +75,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     public static final int REQUEST_LOCATION_CODE = 99;
     final static int REQUEST_LOCATION = 199;
     private static final int ZOOM_LEVEL = 14;
-    private static final int LOCATION_UPDATE_INTERVAL = 15000;
-    private static final int LOCATION_UPDATE_FASTEST_INTERVAL = 10000;
+    private static final int LOCATION_UPDATE_INTERVAL = 40000;
+    private static final int LOCATION_UPDATE_FASTEST_INTERVAL = 20000;
     public static GoogleApiClient client;
     static GoogleMap mMap;
     static double latitude;
@@ -125,6 +124,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         return longitude;
     }
 
+    @SuppressLint("InvalidWakeLockTag")
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -134,7 +134,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (pm != null) {
             this.mWakeLock = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "My Tag");
         }
-        this.mWakeLock.acquire(10 * 60 * 1000L /*10 minutes*/);
+        this.mWakeLock.acquire(10 * 60 * 1000L /* 10 minutes */);
         ButterKnife.bind(this);
 
         if (savedInstanceState != null) {
@@ -166,7 +166,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .findFragmentById(R.id.map);
         mapView = mapFragment.getView();
         mapFragment.getMapAsync(this);
-
     }
 
     @Override
@@ -268,9 +267,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 alertDialog.dismiss();
             }
         });
-
     }
-
 
     public void checkLocationPermission() {
         //If permission is not granted then we ask for permission
@@ -282,12 +279,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             } else {
                 ActivityCompat.requestPermissions(MapsActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION_CODE);
             }
-            //Return false if user has chosen don't ask again method when previously asked for permission
+            // Return false if user has chosen don't ask again method when previously asked for permission
         }
     }
 
     private void getDeviceLocation() {
-          /*
+        /*
          * Get the best and most recent location of the device, which may be null in rare
          * cases when a location is not available.
          */
@@ -306,7 +303,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(
                                     new LatLng(mLastKnownLocation.getLatitude(),
                                             mLastKnownLocation.getLongitude()), 1));
-
                         } else {
                             mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(mDefaultLocation, 1));
                             mMap.getUiSettings().setMyLocationButtonEnabled(true);
@@ -321,7 +317,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     protected synchronized void buildGoogleApiClient() {
-        //Google API Client Created
+        // Google API Client Created
         client = new GoogleApiClient.Builder(this)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
@@ -355,7 +351,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    //Method for handling permission request response
+    // Method for handling permission request response
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         switch (requestCode) {
@@ -381,22 +377,18 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onLocationChanged(Location location) {
-
-        //Get lat and lng of new location
+        // Get lat and lng of new location
         LatLng locChangedCoordinates = new LatLng(location.getLatitude(), location.getLongitude());
         mMap.moveCamera(CameraUpdateFactory.newLatLng(locChangedCoordinates));
         mMap.animateCamera(CameraUpdateFactory.zoomBy(ZOOM_LEVEL));
         if (client != null) {
             LocationServices.FusedLocationApi.removeLocationUpdates(client, this);
         }
-
     }
 
     @Override
     public void onConnected(@Nullable Bundle bundle) {
-
         requestLocationUpdate();
-
         // For dialog Box that ask for enabling GPS
         LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
                 .addLocationRequest(locationRequest);
@@ -409,7 +401,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             public void onResult(@NonNull LocationSettingsResult locationSettingsResult) {
 
                 final Status status = locationSettingsResult.getStatus();
-                final LocationSettingsStates state = locationSettingsResult.getLocationSettingsStates();
                 switch (status.getStatusCode()) {
                     case LocationSettingsStatusCodes.SUCCESS:
                         // All location settings are satisfied. The client can
@@ -464,7 +455,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onBackPressed() {
-
         if (exit) {
             finish(); // finish activity
         } else {
@@ -495,13 +485,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         Toast.makeText(this, "Accuracy: " + acc + " m\n(" + lat + ", " + lng + ")", Toast.LENGTH_SHORT).show();
     }
 
-
     @Override
     protected void onResume() {
         super.onResume();
         LocalBroadcastManager.getInstance(this).registerReceiver(myReceiver,
                 new IntentFilter(LocationService.ACTION_BROADCAST));
-
     }
 
     @Override
@@ -526,7 +514,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onDestroy() {
         this.mWakeLock.release();
         super.onDestroy();
-
     }
 
     /**
@@ -542,6 +529,4 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         }
     }
-
-
 }

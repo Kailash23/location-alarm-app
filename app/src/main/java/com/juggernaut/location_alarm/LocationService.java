@@ -2,6 +2,7 @@ package com.juggernaut.location_alarm;
 
 import android.app.ActivityManager;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -42,73 +43,109 @@ import com.google.android.gms.tasks.Task;
 
 public class LocationService extends Service {
 
-    public final static int MAX_DISTANCE_RANGE = 100;
+    /**
+     * The name of the channel for notifications.
+     */
+    private static final String CHANNEL_ID = "channel_01";
+
+    public final static int MAX_DISTANCE_RANGE = 200;   // trigger alarm when 200m away from destination
+
     private static final String PACKAGE_NAME = "com.juggernaut.location_alarm";
+
     static final String ACTION_BROADCAST = PACKAGE_NAME + ".broadcast";
+
     static final String EXTRA_LOCATION = PACKAGE_NAME + ".location";
+
     private static final String EXTRA_STARTED_FROM_NOTIFICATION = PACKAGE_NAME +
             ".started_from_notification";
+
     private static final String TAG = LocationService.class.getSimpleName();
+
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
      */
-    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 20000;
+    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 30000;
+
     /**
      * The fastest rate for active location updates. Updates will never be more frequent
      * than this value.
      */
     private static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS =
             UPDATE_INTERVAL_IN_MILLISECONDS / 2;
+
     /**
      * The identifier for the notification displayed for the foreground service.
      */
     private static final int NOTIFICATION_ID = 12345678;
+
     private final static int DURATION_OF_VIBRATION = 1000;
+
     private final static int VIBRATE_DELAY_TIME = 2000;
+
     private final static int VOLUME_INCREASE_DELAY = 600;
-    // Volume level increasing step
+
+    /**
+     * Volume level increasing step
+     */
     private final static float VOLUME_INCREASE_STEP = 0.01f;
-    // Max player volume level
+
+    /**
+     * Max player volume level
+     */
     private final static float MAX_VOLUME = 1.0f;
+
     private static MediaPlayer mPlayer;
+
     private static Handler mHandler = new Handler();
+
     private static boolean isAlarmRinging = false;
+
     /**
      * When creating a service that provides binding, you must provide an IBinder
      * that provides the programming interface that clients can use to interact with the service.
      */
     private final IBinder mBinder = new LocalBinder();
+
     /**
      * Used to check whether the bound activity has really gone away and not unbound as part of an
      * orientation change. We create a foreground service notification only if the former takes
      * place.
      */
     private boolean mChangingConfiguration = false;
+
     private NotificationManager mNotificationManager;
+
     /**
-     * Contains parameters used by {@link com.google.android.gms.location.FusedLocationProviderApi}.
+     * Contains parameters used by FusedLocationProviderApi.
      */
     private LocationRequest mLocationRequest;
+
     /**
      * Provides access to the Fused Location Provider API.
      */
     private FusedLocationProviderClient mFusedLocationClient;
+
     /**
      * Callback for changes in location.
      */
     private LocationCallback mLocationCallback;
+
     /**
      * A Handler allows you to send and process Message and Runnable objects associated with a
      * thread's MessageQueue. Each Handler instance is associated with a single thread and that
      * thread's message queue
      */
     private Handler mServiceHandler;
+
     /**
      * The current location.
      */
     private Location mLocation;
+
     private float mVolumeLevel = 0;
+
     private Vibrator mVibrator;
+
     private Runnable mVibrationRunnable = new Runnable() {
         @Override
         public void run() {
@@ -171,8 +208,19 @@ public class LocationService extends Service {
 
         HandlerThread handlerThread = new HandlerThread(TAG);
         handlerThread.start();
+
         mServiceHandler = new Handler(handlerThread.getLooper());
         mNotificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = getString(R.string.app_name);
+            // Create the channel for the notification
+            NotificationChannel mChannel =
+                    new NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_DEFAULT);
+
+            // Set the Notification Channel for the Notification Manager.
+            mNotificationManager.createNotificationChannel(mChannel);
+        }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.ECLAIR)
@@ -189,7 +237,7 @@ public class LocationService extends Service {
             stopSelf();
             stopPlayer();
         }
-        // Tells the system not to try to recreate the service after it has been killed.
+        // Tells the system not to try to re-create the service after it has been killed.
         return START_NOT_STICKY;
     }
 
@@ -244,8 +292,7 @@ public class LocationService extends Service {
     }
 
     /**
-     * Makes a request for location updates. Note that in this sample we merely log the
-     * {@link SecurityException}.
+     * Makes a request for location updates.
      */
     public void requestLocationUpdates() {
         Log.i(TAG, "Requesting location updates");
@@ -255,14 +302,12 @@ public class LocationService extends Service {
             mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                     mLocationCallback, Looper.myLooper());
         } catch (SecurityException unlikely) {
-
             Log.e(TAG, "Lost location permission. Could not request updates. " + unlikely);
         }
     }
 
     /**
-     * Removes location updates. Note that in this sample we merely log the
-     * {@link SecurityException}.
+     * Removes location updates.
      */
     public void removeLocationUpdates() {
         Log.i(TAG, "Removing location updates");
@@ -291,10 +336,12 @@ public class LocationService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT);
 
         // The PendingIntent to launch activity.
+        Intent resumeIntent = new Intent(this, MapsActivity.class);
+        resumeIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         PendingIntent activityPendingIntent = PendingIntent.getActivity(this, 0,
-                new Intent(this, MapsActivity.class), 0);
+                resumeIntent, PendingIntent.FLAG_CANCEL_CURRENT);
 
-        return new NotificationCompat.Builder(this)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this)
                 .addAction(R.drawable.ic_launch, getString(R.string.launch_activity),
                         activityPendingIntent)
                 .addAction(R.drawable.ic_cancel, getString(R.string.remove_location_updates),
@@ -305,7 +352,14 @@ public class LocationService extends Service {
                 .setPriority(Notification.PRIORITY_HIGH)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setTicker(text)
-                .setWhen(System.currentTimeMillis()).build();
+                .setWhen(System.currentTimeMillis());
+
+        // Set the Channel ID for Android O.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder.setChannelId(CHANNEL_ID); // Channel ID
+        }
+
+        return builder.build();
     }
 
     private void getLastLocation() {
@@ -374,16 +428,16 @@ public class LocationService extends Service {
             LocationService.this.stopSelf();
             mPlayer.setVolume(MAX_VOLUME, MAX_VOLUME);
 
-            Notification noti = new Notification.Builder(getApplicationContext())
+            Notification notification = new Notification.Builder(getApplicationContext())
                     .setContentTitle("Location Reached")
                     .setContentText("You reached Destination.")
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setAutoCancel(true)
                     .build();
             NotificationManager manager = (NotificationManager) getApplicationContext().getSystemService(NOTIFICATION_SERVICE);
-            noti.flags |= Notification.FLAG_AUTO_CANCEL;
+            notification.flags |= Notification.FLAG_AUTO_CANCEL;
             if (manager != null) {
-                manager.notify(0, noti);
+                manager.notify(0, notification);
             }
         } catch (Exception e) {
             isAlarmRinging = false;
@@ -406,8 +460,6 @@ public class LocationService extends Service {
 
     /**
      * Returns true if this is a foreground service.
-     *
-     * @param context The {@link Context}.
      */
     public boolean serviceIsRunningInForeground(Context context) {
         ActivityManager manager = (ActivityManager) context.getSystemService(
@@ -429,7 +481,7 @@ public class LocationService extends Service {
      * Class used for the client Binder.  Since this service runs in the same process as its
      * clients, we don't need to deal with IPC.
      */
-    public class LocalBinder extends Binder {
+    class LocalBinder extends Binder {
         LocationService getService() {
             return LocationService.this;
         }
