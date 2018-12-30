@@ -44,11 +44,16 @@ import com.google.android.gms.tasks.Task;
 public class LocationService extends Service {
 
     /**
+     * trigger alarm when 200m away from destination
+     */
+    public final static int MAX_DISTANCE_RANGE = 200;
+
+    private static final String TAG = LocationService.class.getSimpleName();
+
+    /**
      * The name of the channel for notifications.
      */
     private static final String CHANNEL_ID = "channel_01";
-
-    public final static int MAX_DISTANCE_RANGE = 200;   // trigger alarm when 200m away from destination
 
     private static final String PACKAGE_NAME = "com.juggernaut.location_alarm";
 
@@ -58,8 +63,6 @@ public class LocationService extends Service {
 
     private static final String EXTRA_STARTED_FROM_NOTIFICATION = PACKAGE_NAME +
             ".started_from_notification";
-
-    private static final String TAG = LocationService.class.getSimpleName();
 
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
@@ -179,6 +182,7 @@ public class LocationService extends Service {
     };
 
     public LocationService() {
+
     }
 
     static void stopPlayer() {
