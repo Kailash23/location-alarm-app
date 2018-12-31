@@ -390,6 +390,7 @@ public class LocationService extends Service {
         mLocation = location;
         float[] results = new float[3];
         Location.distanceBetween(location.getLatitude(), location.getLongitude(), MapsActivity.getLatitude(), MapsActivity.getLongitude(), results);
+
         if (results[0] < MAX_DISTANCE_RANGE) {
             Toast.makeText(getApplicationContext(), "Destination Reached", Toast.LENGTH_SHORT).show();
             if (!isAlarmRinging) {
@@ -438,6 +439,7 @@ public class LocationService extends Service {
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setAutoCancel(true)
                     .build();
+
             NotificationManager manager = (NotificationManager) getApplicationContext().getSystemService(NOTIFICATION_SERVICE);
             notification.flags |= Notification.FLAG_AUTO_CANCEL;
             if (manager != null) {

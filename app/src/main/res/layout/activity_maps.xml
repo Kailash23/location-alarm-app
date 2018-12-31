@@ -21,6 +21,7 @@
         android:layout_gravity="center"
         android:layout_marginBottom="15dp"
         android:src="@drawable/map_pin"
+        android:onClick="pinClicked"
         android:contentDescription="@string/pin"
         />
 
