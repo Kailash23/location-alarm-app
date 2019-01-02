@@ -15,9 +15,9 @@ public class AlarmActivity extends AppCompatActivity {
         dismissButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent stopIntent = new Intent(AlarmActivity.this, LocationService.class);
+                Intent stopIntent = new Intent(AlarmActivity.this, LocationUpdatesService.class);
                 stopService(stopIntent);
-                LocationService.stopPlayer();
+                LocationUpdatesService.stopPlayer();
                 MapsActivity.mMap.clear();
                 Intent locationAlarmIntent = new Intent(AlarmActivity.this, MapsActivity.class);
                 locationAlarmIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);

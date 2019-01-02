@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.constraint.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="800dp"
-    android:layout_height="300dp"
+    android:layout_width="800px"
+    android:layout_height="300px"
     tools:context=".AlarmActivity">
 
     <android.support.v7.widget.CardView
@@ -21,8 +20,7 @@
 
         <android.support.constraint.ConstraintLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            >
+            android:layout_height="wrap_content">
 
             <TextView
                 android:id="@+id/check_point_name_tv"
@@ -35,7 +33,7 @@
                 app:layout_constraintBottom_toTopOf="@+id/alarm_label"
                 app:layout_constraintLeft_toLeftOf="parent"
                 app:layout_constraintRight_toLeftOf="@+id/vertical_divider"
-                app:layout_constraintTop_toTopOf="parent"/>
+                app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
                 android:id="@+id/alarm_label"
@@ -48,7 +46,7 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintLeft_toLeftOf="parent"
                 app:layout_constraintRight_toLeftOf="@+id/vertical_divider"
-                app:layout_constraintTop_toBottomOf="@+id/check_point_name_tv"/>
+                app:layout_constraintTop_toBottomOf="@+id/check_point_name_tv" />
 
             <View
                 android:id="@+id/vertical_divider"
@@ -59,8 +57,7 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintLeft_toRightOf="@+id/alarm_label"
                 app:layout_constraintRight_toLeftOf="@+id/dismiss_btn"
-                app:layout_constraintTop_toTopOf="parent"
-                />
+                app:layout_constraintTop_toTopOf="parent" />
 
             <TextView
                 android:id="@+id/dismiss_btn"
@@ -72,7 +69,7 @@
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintLeft_toRightOf="@+id/vertical_divider"
                 app:layout_constraintRight_toRightOf="parent"
-                app:layout_constraintTop_toTopOf="parent"/>
+                app:layout_constraintTop_toTopOf="parent" />
         </android.support.constraint.ConstraintLayout>
     </android.support.v7.widget.CardView>
 
