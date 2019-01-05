@@ -4,6 +4,8 @@ import android.content.Context;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.preference.PreferenceManager;
+import android.util.Log;
 
 import java.io.IOException;
 import java.util.List;
@@ -14,10 +16,11 @@ import java.util.Locale;
  */
 
 class Utils {
+
+    private static final String KEY_REQUESTING_LOCATION_UPDATES = "requesting_location_updates";
+
     /**
-     * Returns the {@code location} object as a human readable string.
-     *
-     * @param location The {@link Location}.
+     * Returns the location object as a human readable string.
      */
     static String getLocationCoordinate(Location location) {
         return location == null ? "Unknown location" :
@@ -25,7 +28,7 @@ class Utils {
     }
 
     static String getLocationTitle(Context context) {
-        return context.getString(R.string.location_updated);
+        return context.getString(R.string.current_location);
     }
 
     static String getLocationName(Location location, Context context) {
@@ -46,4 +49,29 @@ class Utils {
         return result;
     }
 
+    /**
+     * Returns true if requesting location updates, otherwise returns false.
+     *
+     * @param context The Context.
+     */
+    static boolean requestingLocationUpdates(Context context) {
+
+        boolean check = PreferenceManager.getDefaultSharedPreferences(context)
+                .getBoolean(KEY_REQUESTING_LOCATION_UPDATES, false);
+        Log.i(LocationUpdatesService.TAG, "Checking whether requesting updates or not - " + check);
+        return  check;
+    }
+
+    /**
+     * Stores the location updates state in SharedPreferences.
+     *
+     * @param requestingLocationUpdates The location updates state.
+     */
+    static void setRequestingLocationUpdates(Context context, boolean requestingLocationUpdates) {
+        Log.i(LocationUpdatesService.TAG, "Stores the location updates state in SharedPreferences - " + requestingLocationUpdates );
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(KEY_REQUESTING_LOCATION_UPDATES, requestingLocationUpdates)
+                .apply();
+    }
 }

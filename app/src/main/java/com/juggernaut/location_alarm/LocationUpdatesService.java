@@ -8,7 +8,6 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.Configuration;
 import android.graphics.BitmapFactory;
 import android.location.Location;
 import android.media.AudioManager;
@@ -22,19 +21,15 @@ import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Vibrator;
-import android.support.annotation.NonNull;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
 
 
 /**
@@ -45,13 +40,15 @@ import com.google.android.gms.tasks.Task;
  * minutes and delivered batched every 30 minutes. This restriction applies even to apps
  * targeting "N" or lower which are run on "O" devices.
  *
- * This sample show how to use a long-running service for location updates. When an activity is
+ * This application show how to use a long-running service for location updates. When an activity is
  * bound to this service, frequent location updates are permitted. When the activity is removed
  * from the foreground, the service promotes itself to a foreground service, and location updates
  * continue. When the activity comes back to the foreground, the foreground service stops, and the
- * notification assocaited with that service is removed.
+ * notification associated with that service is removed.
  */
 public class LocationUpdatesService extends Service {
+
+    public static final String TAG = LocationUpdatesService.class.getSimpleName();
 
     /**
      * trigger alarm when MAX_DISTANCE_RANGE away from destination.
@@ -61,7 +58,7 @@ public class LocationUpdatesService extends Service {
     private static final String PACKAGE_NAME = "com.juggernaut.location_alarm";
     static final String ACTION_BROADCAST = PACKAGE_NAME + ".broadcast";
     static final String EXTRA_LOCATION = PACKAGE_NAME + ".location";
-    private static final String TAG = LocationUpdatesService.class.getSimpleName();
+
     /**
      * The name of the channel for notifications.
      */
@@ -72,7 +69,7 @@ public class LocationUpdatesService extends Service {
     /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
      */
-    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 40000;
+    private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
 
     /**
      * The fastest rate for active location updates. Updates will never be more frequent
@@ -86,11 +83,19 @@ public class LocationUpdatesService extends Service {
      */
     private static final int NOTIFICATION_ID = 12345678;
 
+    /**
+     * Vibrate for 1000 milliseconds
+     */
     private final static int DURATION_OF_VIBRATION = 1000;
-
+    /**
+     * Time period between two vibration events
+     */
     private final static int VIBRATE_DELAY_TIME = 2000;
 
-    private final static int VOLUME_INCREASE_DELAY = 500;
+    /**
+     * Increase alarm volume gradually every 600ms
+     */
+    private final static int VOLUME_INCREASE_DELAY = 600;
 
     /**
      * Volume level increasing step
@@ -102,15 +107,26 @@ public class LocationUpdatesService extends Service {
      */
     private final static float MAX_VOLUME = 1.0f;
 
+    /**
+     * MediaPlayer class can be used to control playback of audio
+     */
     private static MediaPlayer mPlayer;
 
+    /**
+     * A Handler allows you to send and process Message and Runnable objects associated with a
+     * thread's MessageQueue.
+     * Here used to schedule alarm volume increase gradually and vibrate periodically.
+     */
     private static Handler mHandler = new Handler();
 
+    /**
+     * Tracks whether an alarm is ringing or not.
+     */
     private static boolean isAlarmRinging = false;
 
     /**
-     * When creating a service that provides binding, you must provide an IBinder
-     * that provides the programming interface that clients can use to interact with the service.
+     * When creating a service that provides binding, you must provide an IBinder that provides the
+     * programming interface that clients can use to interact with the service.
      */
     private final IBinder mBinder = new LocalBinder();
 
@@ -119,12 +135,12 @@ public class LocationUpdatesService extends Service {
      * orientation change. We create a foreground service notification only if the former takes
      * place.
      */
-    private boolean mChangingConfiguration = false;
 
     private NotificationManager mNotificationManager;
 
     /**
-     * Contains parameters used by FusedLocationProviderApi.
+     * LocationRequest objects are used to request a quality of service for location updates from the
+     * FusedLocationProviderApi.
      */
     private LocationRequest mLocationRequest;
 
@@ -141,7 +157,7 @@ public class LocationUpdatesService extends Service {
     /**
      * A Handler allows you to send and process Message and Runnable objects associated with a
      * thread's MessageQueue. Each Handler instance is associated with a single thread and that
-     * thread's message queue
+     * thread's message queue.
      */
     private Handler mServiceHandler;
 
@@ -150,10 +166,20 @@ public class LocationUpdatesService extends Service {
      */
     private Location mLocation;
 
+    /**
+     * Initial volume level is 0.
+     */
     private float mVolumeLevel = 0;
 
+    /**
+     * operates the vibrator on the device.
+     */
     private Vibrator mVibrator;
 
+    /**
+     * When an object implementing interface Runnable is used to create a thread, starting the thread
+     * causes the object's run method to be called in that separately executing thread.
+     */
     private Runnable mVibrationRunnable = new Runnable() {
         @Override
         public void run() {
@@ -170,6 +196,7 @@ public class LocationUpdatesService extends Service {
         @Override
         public void run() {
             Log.i(TAG, "Volume increasing!");
+
             // increase volume level until reach max value
             if (mPlayer != null && mVolumeLevel < MAX_VOLUME) {
                 mVolumeLevel += VOLUME_INCREASE_STEP;
@@ -180,37 +207,57 @@ public class LocationUpdatesService extends Service {
         }
     };
 
+    /**
+     * Interface definition of a callback to be invoked when there has been an error during an
+     * asynchronous operation.
+     */
     private MediaPlayer.OnErrorListener mErrorListener = new MediaPlayer.OnErrorListener() {
         @Override
         public boolean onError(MediaPlayer mp, int what, int extra) {
             Log.i(TAG, "MediaPlayer error!");
 
-            stopPlayer();
+            stopAlarm();
             LocationUpdatesService.this.stopSelf();
             return true;
         }
     };
 
+    /**
+     * Service class constructor..
+     */
     public LocationUpdatesService() {
     }
 
+    /**
+     * Called by the system when the service is first created.
+     */
     @Override
     public void onCreate() {
-        Log.i(TAG, "onCreate");
+        Log.i(TAG, "<onCreate>");
 
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        /*
+          Used for receiving notifications from the FusedLocationProviderApi when the device location
+          has changed or can no longer be determined.
 
+          The methods are called if the LocationCallback has been registered with the location client
+          using the requestLocationUpdates(LocationRequest, LocationCallback, Looper) method.
+         */
         mLocationCallback = new LocationCallback() {
             @Override
             public void onLocationResult(LocationResult locationResult) {
                 Log.i(TAG, "Location update (LocationCallback)");
                 super.onLocationResult(locationResult);
+                /*
+                  Using the Google Play services location APIs, your app can request the last known location
+                  of the user's device. In most cases, you are interested in the user's current location,
+                  which is usually equivalent to the last known location of the device.
+                 */
                 onNewLocation(locationResult.getLastLocation());
             }
         };
 
         createLocationRequest();
-        getLastLocation();
 
         HandlerThread handlerThread = new HandlerThread(TAG);
         handlerThread.start();
@@ -222,13 +269,24 @@ public class LocationUpdatesService extends Service {
             CharSequence name = getString(R.string.app_name);
             // Create the channel for the notification
             NotificationChannel mChannel =
-                    new NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_DEFAULT);
-
+                    new NotificationChannel(CHANNEL_ID, name, NotificationManager.IMPORTANCE_MIN);
             // Set the Notification Channel for the Notification Manager.
             mNotificationManager.createNotificationChannel(mChannel);
         }
     }
 
+    /**
+     * Called by the system every time a client explicitly starts the service by calling
+     * Context.startService(Intent), providing the arguments it supplied and a unique integer
+     * token representing the start request.
+     *
+     * @param intent  The Intent supplied to Context.startService(Intent)
+     * @param flags   Additional data about this start request.
+     * @param startId A unique integer representing this specific request to start. Use with
+     *                stopSelfResult(int).
+     * @return The return value indicates what semantics the system should use for the service's
+     * current started state.
+     */
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.i(TAG, "Service started (onStartCommand)");
@@ -240,14 +298,17 @@ public class LocationUpdatesService extends Service {
             removeLocationUpdates();
             MapsActivity.mMap.clear();
             stopSelf();
-            stopPlayer();
+            stopAlarm();
         }
         // Tells the system not to try to re-create the service after it has been killed.
         return START_NOT_STICKY;
     }
 
-    static void stopPlayer() {
-        Log.i(TAG, "Media player stopped (stopPlayer)");
+    /**
+     * Use to stop the alarm.
+     */
+    static void stopAlarm() {
+        Log.i(TAG, "Media player stopped (stopAlarm)");
 
         isAlarmRinging = false;
         if (mPlayer != null) {
@@ -257,65 +318,101 @@ public class LocationUpdatesService extends Service {
         }
     }
 
+    /**
+     * Called by the system to notify a Service that it is no longer used and is being removed.
+     * The service should clean up any resources it holds (threads, registered receivers, etc) at
+     * this point.
+     */
     @Override
     public void onDestroy() {
-        Log.i(TAG, "onDestroy");
+        Log.i(TAG, "<onDestroy>");
         mServiceHandler.removeCallbacksAndMessages(null);
     }
 
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        Log.i(TAG, "in onConfigurationChanged");
-        super.onConfigurationChanged(newConfig);
-        mChangingConfiguration = true;
-    }
-
+    /**
+     * To provide binding for a service, you must implement the onBind() callback method.
+     * This method returns an IBinder object that defines the programming interface that
+     * clients can use to interact with the service.
+     *
+     * @param intent The Intent that was used to bind to this service as given to Context.
+     * @return Return the communication channel to the service. May return null if clients can not
+     * bind to the service.
+     */
     @Override
     public IBinder onBind(Intent intent) {
-        Log.i(TAG, "in onBind()");
+        Log.i(TAG, "(onBind())");
         // Called when a client (MainActivity in case of this sample) comes to the foreground
         // and binds with this service. The service should cease to be a foreground service
         // when that happens.
 
         stopForeground(true);
-        mChangingConfiguration = false;
         return mBinder;
     }
 
+    /**
+     * Called when all clients have disconnected from a particular interface published by the service.
+     * The default implementation does nothing and returns false.
+     *
+     * @param intent The Intent that was used to bind to this service.
+     * @return Return true if you would like to have the service's onRebind(Intent) method later
+     * called when new clients bind to it.
+     */
     @Override
     public boolean onUnbind(Intent intent) {
-        Log.i(TAG, "Last client unbound from service (onUnbind)");
-
+        Log.i(TAG, "(onUnbind())");
+        // Last client unbound from service
         // Called when the last client (MainActivity in case of this sample) unbinds from this
         // service. If this method is called due to a configuration change in MainActivity, we
         // do nothing. Otherwise, we make this service a foreground service.
-        if (!mChangingConfiguration && mLocation != null) {
-            Log.i(TAG, "Starting foreground service (onUnbind)");
+
+        if (Utils.requestingLocationUpdates(this)) {
+            /*
+              Makes service run in the foreground, supplying the ongoing notification to be
+              shown to the user while in this state.
+
+              id - The identifier for this notification as per NotificationManager.notify(int, Notification);
+              must not be 0.
+
+              notification - Notification: The Notification to be displayed.
+             */
             startForeground(NOTIFICATION_ID, getNotification());
         }
         return true; // Ensures onRebind() is called when a client re-binds.
     }
 
+    /**
+     * Called when new clients have connected to the service, after it had previously been notified
+     * that all had disconnected in its onUnbind(Intent). This will only be called if the implementation
+     * of onUnbind(Intent) was overridden to return true.
+     *
+     * @param intent The Intent that was used to bind to this service
+     */
     @Override
     public void onRebind(Intent intent) {
-        Log.i(TAG, "in onRebind()");
+        Log.i(TAG, "(onRebind())");
+
         // Called when a client (MainActivity in case of this sample) returns to the foreground
         // and binds once again with this service. The service should cease to be a foreground
         // service when that happens.
 
         stopForeground(true);
-        mChangingConfiguration = false;
+
+        // Remove this service from foreground state, allowing it to be killed if more memory is needed.
+        // removeNotification - boolean: If true, the STOP_FOREGROUND_REMOVE flag will be supplied.
         super.onRebind(intent);
     }
 
+    /**
+     * Operations to do on getting a new location
+     */
     private void onNewLocation(Location location) {
-        Log.i(TAG, "New location: " + location);
+        Log.i(TAG, "New location : " + location);
+
         mLocation = location;
         float[] results = new float[3];
         Location.distanceBetween(location.getLatitude(), location.getLongitude(), MapsActivity.getLatitude(), MapsActivity.getLongitude(), results);
-
+        Log.i(TAG, "Distance: " + String.valueOf(results[0]));
         if (results[0] < MAX_DISTANCE_RANGE) {
-            Toast.makeText(getApplicationContext(), "Destination Reached", Toast.LENGTH_SHORT).show();
             if (!isAlarmRinging) {
                 startAlarm();
                 Intent intent = new Intent(this, AlarmActivity.class);
@@ -331,7 +428,7 @@ public class LocationUpdatesService extends Service {
 
         // Update notification content if running as a foreground service.
         if (serviceIsRunningInForeground(this)) {
-            Log.i(TAG, "Notification launch");
+            Log.i(TAG, "(onNewLocation) : Notification content updated.");
             mNotificationManager.notify(NOTIFICATION_ID, getNotification());
         }
     }
@@ -340,7 +437,7 @@ public class LocationUpdatesService extends Service {
      * Sets the location request parameters.
      */
     private void createLocationRequest() {
-        Log.i(TAG, "Setting location request parameter (createLocationRequest)");
+        Log.i(TAG, "(createLocationRequest) - Setting location request parameter.");
 
         mLocationRequest = new LocationRequest();
         mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
@@ -348,27 +445,12 @@ public class LocationUpdatesService extends Service {
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
     }
 
-    private void getLastLocation() {
-        try {
-            mFusedLocationClient.getLastLocation()
-                    .addOnCompleteListener(new OnCompleteListener<Location>() {
-                        @Override
-                        public void onComplete(@NonNull Task<Location> task) {
-                            if (task.isSuccessful() && task.getResult() != null) {
-                                Log.i(TAG, "succeed in getting last location. (getLastLocation)");
-                                mLocation = task.getResult();
-                            } else {
-                                Log.w(TAG, "Failed to get location. (getLastLocation)");
-                            }
-                        }
-                    });
-        } catch (SecurityException unlikely) {
-            Log.e(TAG, "Lost location permission." + unlikely);
-        }
-    }
-
+    /**
+     * Use to start the alarm.
+     */
     private void startAlarm() {
-        Log.i(TAG, "in startAlarm");
+        Log.i(TAG, "startAlarm");
+
         mPlayer = new MediaPlayer();
         mPlayer.setOnErrorListener(mErrorListener);
 
@@ -376,6 +458,7 @@ public class LocationUpdatesService extends Service {
             isAlarmRinging = true;
             mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
             mHandler.post(mVibrationRunnable);
+            mHandler.post(mVolumeRunnable);
             String ringtone;
             ringtone = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM).toString();
             mPlayer.setDataSource(this, Uri.parse(ringtone));
@@ -422,21 +505,21 @@ public class LocationUpdatesService extends Service {
                     Integer.MAX_VALUE)) {
                 if (getClass().getName().equals(service.service.getClassName())) {
                     if (service.foreground) {
-                        Log.i(TAG,"Service running in foreground");
+                        Log.i(TAG, "Service running in foreground");
                         return true;
                     }
                 }
             }
         }
-        Log.i(TAG,"Service not running in foreground");
+        Log.i(TAG, "Service not running in foreground");
         return false;
     }
 
     /**
-     * Returns the {@link NotificationCompat} used as part of the foreground service.
+     * Returns the NotificationCompat used as part of the foreground service.
      */
     private Notification getNotification() {
-        Log.i(TAG,"in getNotification");
+        Log.i(TAG, "Notification build");
         Intent intent = new Intent(this, LocationUpdatesService.class);
 
         CharSequence text = Utils.getLocationCoordinate(mLocation);
@@ -461,12 +544,13 @@ public class LocationUpdatesService extends Service {
                         activityPendingIntent)
                 .addAction(R.drawable.ic_cancel, getString(R.string.remove_location_updates),
                         servicePendingIntent)
-                .setContentText(Utils.getLocationName(mLocation, this))
                 .setContentTitle(Utils.getLocationTitle(this))
+                .setContentText(Utils.getLocationName(mLocation, this))
                 .setOngoing(true)
-                .setPriority(Notification.PRIORITY_HIGH)
+                .setPriority(Notification.PRIORITY_LOW)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setTicker(text)
+                .setDefaults(Notification.DEFAULT_LIGHTS)
                 .setWhen(System.currentTimeMillis());
 
         // Set the Channel ID for Android O.
@@ -481,11 +565,14 @@ public class LocationUpdatesService extends Service {
      * Removes location updates.
      */
     public void removeLocationUpdates() {
-        Log.i(TAG, "Removing location updates (removeLocationUpdates)");
+        Log.i(TAG, "(removeLocationUpdates) - Removing location updates");
+
         try {
             mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+            Utils.setRequestingLocationUpdates(this, false);
             stopSelf();
         } catch (SecurityException unlikely) {
+            Utils.setRequestingLocationUpdates(this, true);
             Log.e(TAG, "Lost location permission. Could not remove updates. " + unlikely);
         }
     }
@@ -494,12 +581,17 @@ public class LocationUpdatesService extends Service {
      * Makes a request for location updates.
      */
     public void requestLocationUpdates() {
-        Log.i(TAG, "Requesting location updates (requestLocationUpdates)");
+        Log.i(TAG, "(requestLocationUpdates) - Requesting location updates");
+
+        Utils.setRequestingLocationUpdates(this, true);
+        // Start a service by calling startService(), which allows the service to run indefinitely.
+        // When the service has been started, the system does not destroy the service when all clients unbind.
         startService(new Intent(getApplicationContext(), LocationUpdatesService.class));
         try {
             mFusedLocationClient.requestLocationUpdates(mLocationRequest,
                     mLocationCallback, Looper.myLooper());
         } catch (SecurityException unlikely) {
+            Utils.setRequestingLocationUpdates(this, false);
             Log.e(TAG, "Lost location permission. Could not request updates. " + unlikely);
         }
     }
@@ -510,7 +602,7 @@ public class LocationUpdatesService extends Service {
      */
     class LocalBinder extends Binder {
         LocationUpdatesService getService() {
-            Log.i(TAG, "in getService");
+            Log.i(TAG, "<getService>");
             return LocationUpdatesService.this;
         }
     }

@@ -7,9 +7,9 @@
     <string name="destination_reached">Destination Reached</string>
     <string name="button_dismiss_label">Dismiss</string>
     <string name="launch_activity">Launch activity</string>
-    <string name="unknown_location">Location unknown</string>
+    <string name="unknown_location">Location Unknown</string>
     <string name="location_reached">Location Reached</string>
-    <string name="location_updated">Location Updated</string>
+    <string name="current_location">You are at</string>
     <string name="settings">Settings</string>
     <string name="ok">OK</string>
     <string name="permission_rationale">Location permission is needed for core functionality</string>
@@ -20,4 +20,5 @@
     <string name="long_dialog_text">Longitude:</string>
     <string name="destination">Destination</string>
     <string name="pin">location pin</string>
+    <string name="tag">myapp:mywakelocktag.</string>
 </resources>

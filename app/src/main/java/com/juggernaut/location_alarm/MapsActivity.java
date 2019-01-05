@@ -20,6 +20,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.LocalBroadcastManager;
@@ -57,6 +58,7 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -68,13 +70,12 @@ import com.google.android.gms.tasks.Task;
 /**
  * Using location settings.
  *
- * Uses the {@link com.google.android.gms.location.SettingsClient} to ensure that the device's system
- * settings are properly configured for the app's location needs. When making a request to
- * Location services, the device's system settings may be in a state that prevents the app from
- * obtaining the location data that it needs. For example, GPS or Wi-Fi scanning may be switched
- * off. The {@code SettingsClient} makes it possible to determine if a device's system settings are
- * adequate for the location request, and to optionally invoke a dialog that allows the user to
- * enable the necessary settings.
+ * Uses the SettingsClient to ensure that the device's system settings are properly configured for
+ * the app's location needs. When making a request to Location services, the device's system settings
+ * may be in a state that prevents the app from obtaining the location data that it needs. For example,
+ * GPS or Wi-Fi scanning may be switched off. The SettingsClient makes it possible to determine if a
+ * device's system settings are adequate for the location request, and to optionally invoke a dialog
+ * that allows the user to enable the necessary settings.
  *
  * This application allows the user to request location updates using the ACCESS_FINE_LOCATION setting
  * (as specified in AndroidManifest.xml).
@@ -206,8 +207,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
      * Monitors the state of the connection to the service.
      */
     private final ServiceConnection mServiceConnection = new ServiceConnection() {
-        // Called when a connection  to the Service has been established, with the
-        // {@link android.os.IBinder} of the communication channel to the Service.
+        // Called when a connection  to the Service has been established, with the IBinder
+        // of the communication channel to the Service.
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             Log.i(TAG, "Service Connected");
@@ -216,10 +217,11 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             mBound = true;
         }
 
-        //Called when a connection to the Service has been lost.
+        // Called when a connection to the Service has been lost.
         @Override
         public void onServiceDisconnected(ComponentName name) {
             Log.i(TAG, "Service Disconnected");
+
             mService = null;
             mBound = false;
         }
@@ -252,7 +254,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.i(TAG, "MapsActivity's onCreate");
+        Log.i(TAG, "<onCreate>");
 
         setContentView(R.layout.activity_maps);
 
@@ -261,6 +263,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         mapView = mapFragment.getView();
         mapFragment.getMapAsync(this);
 
+        Utils.setRequestingLocationUpdates(this, false);
         mRequestingLocationUpdates = true;
         updateValuesFromBundle(savedInstanceState);
 
@@ -273,7 +276,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         final PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         if (powerManager != null) {
-            this.mWakeLock = powerManager.newWakeLock(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, "myapp:mywakelocktag.");
+            this.mWakeLock = powerManager.newWakeLock(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON, getString(R.string.tag));
         }
         this.mWakeLock.acquire(5 * 60 * 1000L);    // 5 Minutes
 
@@ -289,6 +292,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         createLocationCallback();
         createLocationRequest();
         buildLocationSettingsRequest();
+
     }
 
     /**
@@ -300,22 +304,18 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (savedInstanceState != null) {
             // Update the value of mRequestingLocationUpdates from the Bundle
             if (savedInstanceState.keySet().contains(KEY_REQUESTING_LOCATION_UPDATES)) {
-                Log.i(TAG, "Getting mRequestingLocationUpdates from bundle!");
-
                 mRequestingLocationUpdates = savedInstanceState.getBoolean(
                         KEY_REQUESTING_LOCATION_UPDATES);
+                Log.i(TAG, "Getting mRequestingLocationUpdates from bundle - " + mRequestingLocationUpdates);
             }
 
             // Update the value of mCurrentLocation from the Bundle and update the UI to show the
             // correct latitude and longitude.
             if (savedInstanceState.keySet().contains(KEY_LOCATION)) {
-                // Since KEY_LOCATION was found in the Bundle, we can be sure that mCurrentLocation
-                // is not null.
-                Log.i(TAG, "Getting Location from bundle!");
-
+                // Since KEY_LOCATION was found in the Bundle, we can be sure that mCurrentLocation is not null.
                 mCurrentLocation = savedInstanceState.getParcelable(KEY_LOCATION);
+                Log.i(TAG, "Getting Location from bundle!" + mCurrentLocation);
             }
-            updateCurrentLocation();
         }
     }
 
@@ -327,25 +327,23 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             @Override
             public void onPlaceSelected(Place place) {
                 Log.i(TAG, "Place selected !");
-
                 LatLng coordinate;
                 coordinate = place.getLatLng();
-
                 CameraUpdate location = CameraUpdateFactory.newLatLngZoom(
                         coordinate, ZOOM_LEVEL);
-
                 mMap.animateCamera(location);
+
             }
 
             @Override
             public void onError(Status status) {
                 Log.i(TAG, "Place selection failed!");
-
                 Toast.makeText(getApplicationContext(), "Place selection failed: " + status.getStatusMessage(),
                         Toast.LENGTH_SHORT).show();
             }
         });
     }
+
 
     /**
      * Creates a callback for receiving location events.
@@ -357,6 +355,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 super.onLocationResult(locationResult);
                 Log.i(TAG, "Location callback created!");
 
+                // Using the Google Play services location APIs, your app can request the last known location
+                // of the user's device. In most cases, you are interested in the user's current location,
+                // which is usually equivalent to the last known location of the device.
                 mCurrentLocation = locationResult.getLastLocation();
                 updateCurrentLocation();
             }
@@ -365,14 +366,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     /**
      * Sets up the location request. Android has two location request settings:
-     * {@code ACCESS_COARSE_LOCATION} and {@code ACCESS_FINE_LOCATION}. These settings control
-     * the accuracy of the current location. This application uses ACCESS_FINE_LOCATION, as defined in
-     * the AndroidManifest.xml.
-     * <p>
+     * ACCESS_COARSE_LOCATION and ACCESS_FINE_LOCATION. These settings control
+     * the accuracy of the current location. This application uses ACCESS_FINE_LOCATION,
+     * as defined in the AndroidManifest.xml.
+     *
      * When the ACCESS_FINE_LOCATION setting is specified, combined with a fast update
      * interval (5 seconds), the Fused Location Provider API returns location updates that are
      * accurate to within a few feet.
-     * <p>
+     *
      * These settings are appropriate for mapping applications that show real-time location
      * updates.
      */
@@ -395,9 +396,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     /**
-     * Uses a {@link com.google.android.gms.location.LocationSettingsRequest.Builder} to build
-     * a {@link com.google.android.gms.location.LocationSettingsRequest} that is used for checking
-     * if a device has the needed location settings.
+     * Uses a LocationSettingsRequest.Builder to build LocationSettingsRequest that is used
+     * for checking if a device has the needed location settings.
      */
     private void buildLocationSettingsRequest() {
         Log.i(TAG, "GPS dialog created!");
@@ -412,7 +412,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
      */
     private void updateCurrentLocation() {
         if (mCurrentLocation != null) {
-            Log.i(TAG, "Current location updated!");
+            Log.i(TAG, "Current location updated - " + mCurrentLocation.getLatitude() + ", " + mCurrentLocation.getLongitude());
 
             currentLatitude = mCurrentLocation.getLatitude();
             currentLongitude = mCurrentLocation.getLongitude();
@@ -427,27 +427,34 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     protected void onStart() {
         super.onStart();
-        Log.i(TAG, "MapsActivity's onStart");
+        Log.i(TAG, "<onStart>");
 
         mRequestingLocationUpdates = true;
         myReceiver = new MyReceiver();
         if (checkPermissions()) {
             startLocationUpdates();
 
-            // Bind to the service. If the service is in foreground mode, this signals to the service
-            // that since this activity is in the foreground, the service can exit foreground mode.
-            bindService(new Intent(this, LocationUpdatesService.class), mServiceConnection,
-                    Context.BIND_AUTO_CREATE);
         } else {
             requestPermissions();
         }
+        // Bind to the service. If the service is in foreground mode, this signals to the service
+        // that since this activity is in the foreground, the service can exit foreground mode.
+        bindService(new Intent(this, LocationUpdatesService.class), mServiceConnection,
+                Context.BIND_AUTO_CREATE);
+    }
 
-        updateCurrentLocation();
+    @Override
+    protected void onResume() {
+        super.onResume();
+        Log.i(TAG, "<onResume>");
+
+        LocalBroadcastManager.getInstance(this).registerReceiver(myReceiver,
+                new IntentFilter(LocationUpdatesService.ACTION_BROADCAST));
     }
 
     @Override
     protected void onStop() {
-        Log.i(TAG, "MapsActivity's onPause");
+        Log.i(TAG, "<onStop>");
 
         if (mBound) {
             // Unbind from the service. This signals to the service that this activity is no longer
@@ -461,7 +468,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public void onDestroy() {
-        Log.i(TAG, "MapsActivity's onDestory!");
+        Log.i(TAG, "<onDestroy>");
 
         this.mWakeLock.release();
         super.onDestroy();
@@ -473,7 +480,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
      */
     @Override
     protected void onSaveInstanceState(Bundle savedInstanceState) {
-        Log.i(TAG, "Saving state of the application");
+        Log.i(TAG, "Saving state of the application - " + mRequestingLocationUpdates);
 
         savedInstanceState.putBoolean(KEY_REQUESTING_LOCATION_UPDATES, mRequestingLocationUpdates);
         savedInstanceState.putParcelable(KEY_LOCATION, mCurrentLocation);
@@ -512,7 +519,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 })
                 .addOnFailureListener(this, new OnFailureListener() {
                     @Override
-                    public void onFailure(Exception e) {
+                    public void onFailure(@NonNull Exception e) {
                         int statusCode = ((ApiException) e).getStatusCode();
                         switch (statusCode) {
                             case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
@@ -576,7 +583,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     /**
-     * Shows a {@link Snackbar}.
+     * Shows Snackbar.
      *
      * @param mainTextStringId The id for the string resource for the Snackbar text.
      * @param actionStringId   The text of the action item.
@@ -604,10 +611,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         destinationLongitude = targetCoordinate.longitude;
 
         AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
-        View dialogView =
-                LayoutInflater.from(MapsActivity.this).inflate(R.layout.dialog_box, null, false);
-        ((TextView) dialogView.findViewById(R.id.checkpoint_lat_tv)).setText(String.format("%s%s", getString(R.string.lat_dialog_text), String.valueOf(targetCoordinate.latitude)));
-        ((TextView) dialogView.findViewById(R.id.checkpoint_long_tv)).setText(String.format("%s%s", getString(R.string.long_dialog_text), String.valueOf(targetCoordinate.longitude)));
+        View dialogView = LayoutInflater.from(MapsActivity.this)
+                .inflate(R.layout.dialog_box, null, false);
+        ((TextView) dialogView.findViewById(R.id.checkpoint_lat_tv))
+                .setText(String.format("%s%s", getString(R.string.lat_dialog_text), String.valueOf(targetCoordinate.latitude)));
+        ((TextView) dialogView.findViewById(R.id.checkpoint_long_tv))
+                .setText(String.format("%s%s", getString(R.string.long_dialog_text), String.valueOf(targetCoordinate.longitude)));
 
         final EditText nameEditText = dialogView.findViewById(R.id.checkpoint_name_tv);
         final AlertDialog alertDialog = builder.setView(dialogView).show();
@@ -623,29 +632,34 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         float[] results = new float[3];
                         Location.distanceBetween(currentLatitude, currentLongitude, destinationLatitude, destinationLongitude, results);
 //                        if (results[0] < LocationUpdatesService.MAX_DISTANCE_RANGE) {
-                        Toast.makeText(getApplicationContext(), "You are already near to the destination", Toast.LENGTH_SHORT).show();
+//                             Toast.makeText(getApplicationContext(), "You are already near to the destination", Toast.LENGTH_SHORT).show();
 //                        } else {
                         MarkerOptions markerOptions = new MarkerOptions();
                         markerOptions.position(targetCoordinate);
+                        markerOptions.draggable(false);
                         markerOptions.icon(BitmapDescriptorFactory.fromResource(R.drawable.flag));
                         markerOptions.title(enteredText);
-                        markerOptions.draggable(true);
                         mMap.clear();
                         mMap.addMarker(markerOptions);
                         mMap.animateCamera(CameraUpdateFactory.newLatLng(targetCoordinate));
                         mMap.setMaxZoomPreference(mMap.getMaxZoomLevel());
+                        LatLng latLng = new LatLng(destinationLatitude, destinationLongitude);
+                        mMap.addCircle(new CircleOptions().center(latLng)
+                                .strokeWidth(5)
+                                .strokeColor(getResources().getColor(R.color.cardview_dark_background))
+                                .radius(LocationUpdatesService.MAX_DISTANCE_RANGE));
 
                         if (!checkPermissions()) {
                             requestPermissions();
                         } else {
-                            mService.requestLocationUpdates();
+                            if (!Utils.requestingLocationUpdates(getApplicationContext())) {
+                                mService.requestLocationUpdates();
+                            }
                         }
                         alertDialog.dismiss();
 //                        }
 
                     } else {
-                        Log.i(TAG, "Name should be atleast 4 character!");
-
                         nameEditText.setError("Name should have minimum of 4 characters.");
                     }
                 }
@@ -653,15 +667,15 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
 
         Button cancel = alertDialog.findViewById(R.id.dialogbox_cancel_btn);
-        assert cancel != null;
-        cancel.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Log.i(TAG, "Cancel Clicked!");
-
-                alertDialog.dismiss();
-            }
-        });
+        if (cancel != null) {
+            cancel.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Log.i(TAG, "Cancel Clicked!");
+                    alertDialog.dismiss();
+                }
+            });
+        }
     }
 
     /**
@@ -690,17 +704,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             layoutParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, RelativeLayout.TRUE);
             layoutParams.setMargins(0, 0, 50, 50);
         }
-
         if (checkPermissions()) {
             mMap.setMyLocationEnabled(true);
-            Log.i(TAG, "Location Button Enabled! (1)");
         }
+        Log.i(TAG, "Location Button Enabled! (1)");
     }
 
     /**
-     * Getting a Result from an Activity.
-     * <p>
-     * Track response from dialog for enabling GPS.
+     * Getting a Result from an Activity & track response from dialog for enabling GPS.
      */
     @SuppressLint("MissingPermission")
     @Override
@@ -721,9 +732,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         break;
                     case Activity.RESULT_CANCELED:
                         Log.i(TAG, "User chose not to make required location settings changes.");
-
+                        Toast.makeText(this, "Enable GPS for getting accurate result.", Toast.LENGTH_SHORT).show();
                         mRequestingLocationUpdates = false;
-                        updateCurrentLocation();
                         break;
                 }
                 break;
@@ -754,7 +764,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     protected void onPause() {
-        Log.i(TAG, "MapsActivity's onPause!");
+        Log.i(TAG, "<onPause>");
 
         if (mRequestingLocationUpdates) {
             stopLocationUpdates();
@@ -779,7 +789,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         mFusedLocationProviderClient.removeLocationUpdates(mLocationCallback)
                 .addOnCompleteListener(this, new OnCompleteListener<Void>() {
                     @Override
-                    public void onComplete(Task<Void> task) {
+                    public void onComplete(@NonNull Task<Void> task) {
                         Log.i(TAG, "Location update stopped!");
 
                         mRequestingLocationUpdates = false;
@@ -787,24 +797,15 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 });
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        Log.i(TAG, "MapsActivity's onResume!");
-
-        LocalBroadcastManager.getInstance(this).registerReceiver(myReceiver,
-                new IntentFilter(LocationUpdatesService.ACTION_BROADCAST));
-    }
-
     /**
      * Handle the permissions request response
-     * <p>
+     *
      * When the user responds to your app's permission request, the system invokes your app's
      * onRequestPermissionsResult() method, passing it the user response.
      */
     @SuppressLint("MissingPermission")
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         Log.i(TAG, "onRequestPermissionResult");
         if (requestCode == REQUEST_PERMISSIONS_REQUEST_CODE) {
             if (grantResults.length <= 0) {
@@ -856,7 +857,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
      * @param location Current geographic location.
      */
     @Override
-    public void onMyLocationClick(Location location) {
+    public void onMyLocationClick(@NonNull Location location) {
         Log.i(TAG, "Location button Clicked!");
 
         int acc;
@@ -866,7 +867,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     /**
-     * Receiver for broadcasts sent by {@link LocationUpdatesService}.
+     * Receiver for broadcasts sent by LocationUpdatesService.
      */
     private class MyReceiver extends BroadcastReceiver {
         @Override
@@ -875,11 +876,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
             if (location != null) {
                 Log.i(TAG, "Receiving broadcasts : " + location.getLatitude() + ", " + location.getLongitude());
 
-                Toast.makeText(MapsActivity.this, Utils.getLocationCoordinate(location),
-                        Toast.LENGTH_SHORT).show();
+                //     Toast.makeText(MapsActivity.this, Utils.getLocationCoordinate(location), Toast.LENGTH_SHORT).show();
             }
         }
     }
-
 
 }
